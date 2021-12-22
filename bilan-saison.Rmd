@@ -32,6 +32,7 @@ header-includes:
 ---
 
 ```{r setup, include=FALSE}
+# GET /api/athlete/{id}/wellness?oldest=2021-09-10&newest=2022-01-17
 # "https://intervals.icu/api/athlete/i38318/activities.csv"
 # i si profil créer sur intervals et sinon jsute les chiffres si créer avec strava
 # nom athlète
@@ -321,7 +322,7 @@ records_clean <- records %>%
 
 **Comparaison de différentes méthodes de quantification de la charge d'entraînement**
 
-```{r TL, fig.cap="Méthodes de quantification de la charge d'entraînement externe (Watts, travail) et interne (Fc). \\newline{}\\textbf{Charge d'entraînement chronique}: représente la charge globale que votre corps est habitué à supporter (derniers 42 jours). En général, vous pouvez voir la charge chronique comme un indicateur du niveau de forme physique: plus votre corps peut s'entraîner, plus vous êtes en forme. \\newline{}\\textbf{Charge d'entraînement aigue}: représente votre charge d'entraînement au cours de la dernière semaine (derniers 7 jours). En particulier, la charge d'entraînement aigue est liée à la fatigue: l'augmentation de la fréquence des entraînements intenses au cours des derniers jours entraîne une fatigue plus élevée.", fig.width=11, fig.height=12}
+```{r TL, fig.cap="Méthodes de quantification de la charge d'entraînement externe (Watts, Travail) et interne (Fréquence cardiaque). \\newline{}\\textbf{Charge d'entraînement chronique}: représente la charge globale que votre corps est habitué à supporter (derniers 42 jours). En général, vous pouvez voir la charge chronique comme un indicateur du niveau de forme physique: plus votre corps peut s'entraîner, plus vous êtes en forme. \\newline{}\\textbf{Charge d'entraînement aigue}: représente votre charge d'entraînement au cours de la dernière semaine (derniers 7 jours). En particulier, la charge d'entraînement aigue est liée à la fatigue: l'augmentation de la fréquence des entraînements intenses au cours des derniers jours entraîne une fatigue plus élevée.", fig.width=11, fig.height=12}
 gg_tss <-
    ggplot(metriques_clean, aes(date, weight = icu_training_load)) +
    geom_vline(
@@ -390,7 +391,7 @@ gg_kj <-
                     values = alpha("grey"),
                     labels = "Données journalières",
                     drop = FALSE) +
-   labs(y = "Kilojoules simplifié (kJ)\n", x = "") +
+   labs(y = "Kilojoules simplifiées (kJ)\n", x = "") +
    ggtitle("Charge: travail simplifiée (kJ)") +
    theme_minimal() +
    theme(
@@ -437,7 +438,7 @@ gg_trimp <-
                     drop = FALSE) +
    labs(y = "LuTRIMP (UA)\n", x = "") +
    scale_x_date(breaks = datebreaks, date_labels = "%b") +
-   ggtitle("Charge: Lucia's training impulse (fréquence cardique)") +
+   ggtitle("Charge: Lucia's training impulse (fréquence cardiaque)") +
    theme_minimal() +
    theme(
       legend.position = "top",
@@ -600,7 +601,7 @@ graphs <- grid.arrange(
 
 **Aperçu global de la charge d'entraînement et des mesures descriptives**
 
-```{r global,  fig.cap="Évolution de la charge d’entraînement et des mesures descriptives au cours de la saison. \\newline{}\\textbf{Risque de maladaptation}: le rapport entre votre condition physique et votre fatigue peut être utilisé pour déterminer le risque de maladaptation ou de blessure. Une charge d'entraînement aigue élevée et une charge d'entraînement chronique faible sont des signes avant-coureurs de maladaptation à l'entraînement, car nous stressons le corps plus qu'il n'en a l'habitude. \\newline{}\\textbf{Fraîcheur}: la différence entre votre charge chronique (≈forme) et votre charge aigue (≈fatigue) peut être utilisée pour déterminer le niveau de préparation à la performance. Une valeur optimale est généralement un peu au-dessus de zéro. \\newline{}\\textbf{Monotonie}: fait référence à la similitude de l'entraînement sur une période de 7 jours. Une faible monotonie est normalement associée à des méthodes de périodisation alternant des entraînements à haute et basse intensité. Une valeur élevée indique que l'entraînement peut être inefficace et conduire à une stagnation ou à un manque d'amélioration.", fig.width=11, fig.height=10.25}
+```{r global,  fig.cap="Évolution de la charge d’entraînement et des mesures descriptives au cours de la saison. \\newline{}\\textbf{Risque de maladaptation}: le rapport entre votre charge d'entraînement chronique et votre charge aigue peut être utilisé pour déterminer le risque de maladaptation ou de blessure. Une charge d'entraînement aigue élevée et une charge d'entraînement chronique faible sont des signes avant-coureurs de maladaptation à l'entraînement puisque nous stressons le corps plus qu'il n'en a l'habitude. \\newline{}\\textbf{Fraîcheur}: la différence entre votre charge chronique (≈forme) et votre charge aigue (≈fatigue) peut être utilisée pour déterminer le niveau de préparation à la performance. Une valeur optimale est généralement un peu au-dessus de zéro. \\newline{}\\textbf{Monotonie}: fait référence à la similitude de l'entraînement sur une période de 7 jours. Une faible monotonie est normalement associée à des méthodes de périodisation alternant des entraînements à haute et basse intensité. Une valeur élevée indique que l'entraînement peut être inefficace et conduire à une stagnation ou à un manque d'amélioration.", fig.width=11, fig.height=10.25}
 graphs <- grid.arrange(
    arrangeGrob(gg_kj, ncol = 1, nrow = 1),
    arrangeGrob(gg_acwr_kj, ncol = 1, nrow = 1),
@@ -705,7 +706,7 @@ Puissance critique (CP): **`r round(cp)`**
 $\color{Gray}{\textbf{ | }}$
 W': **`r W`**
 
-```{r CP, fig.cap="Modèle avec le meilleure combinaison.", results = 'hide', fig.width=11, fig.height=4,}
+```{r CP, fig.cap="Modèle avec la meilleure combinaison.", results = 'hide', fig.width=11, fig.height=4,}
 gg <- combinations_results %>% 
   slice_min(RMSE, n = 1) %>% 
   dplyr::pull(plot)
@@ -715,7 +716,7 @@ gg
 
 \newpage
 
-Zones d'entraînement basées sur une puissance critique de **`r round(cp)`** Watts
+Zones d'entraînement établies à partir d'une puissance critique de **`r round(cp)`** Watts
 
 ```{r zonesW}
 zones_p <- metriques_clean %>%
@@ -890,13 +891,13 @@ df_z_p %>%
    column_spec(7, width = "1.3cm") %>%
    footnote(
       general_title = "",
-      general = "Les zones puissane sont basées sur le modèle de Coggan.",
+      general = "Les zones de puissane sont fondées sur le modèle de Coggan.",
       threeparttable = T,
       fixed_small_size = T
    )
 ```
 
-Zones d'entraînement basées sur une fréquence cardiaque maximale de **`r fc_max`** bpm
+Zones d'entraînement établies à partir d'une fréquence cardiaque maximale de **`r fc_max`** bpm
 
 ```{r zonesFC}
 zones_fc <- metriques_clean %>%
@@ -1033,7 +1034,7 @@ df_z_fc %>%
    column_spec(7, width = "1.3cm") %>%
    footnote(
       general_title = "",
-      general = "Les zones de fréquence cardiaque sont basées sur le modèle de Stephen Seiler.",
+      general = "Les zones de fréquence cardiaque sont fondées sur le modèle de Stephen Seiler.",
       threeparttable = T,
       fixed_small_size = T
    )
@@ -1850,7 +1851,7 @@ df_coggan %>%
       stroke = 3
    ) +
    geom_text(
-      aes(x = temps, y = -2, label = paste0(wkg, " (w/kg)")),
+      aes(x = temps, y = -2, label = paste0(wkg, " (W/kg)")),
       color = "#A083D4",
       size = 3.5,
       fontface = "bold"
@@ -2022,7 +2023,7 @@ cor_df_7 <- metriques_clean %>%
           17:27) %>%
    rename(
       eCP = icu_pm_cp_ravg7,
-      "eW" = icu_pm_w_prime_ravg7,
+      "eW'" = icu_pm_w_prime_ravg7,
       "Endurance aérobie" = efficacite_aerobique_ravg7,
       "Zone1 (h)" = zone1_ravg7,
       "Zone2 (h)" = zone2_ravg7,
