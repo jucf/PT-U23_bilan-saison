@@ -1,29 +1,28 @@
 ---
 title: "Bilan saison"
-output:
-  pdf_document: 
-    latex_engine: xelatex
 dev: cairo_pdf
+df_print: paged
+output:
+  pdf_document:
+    latex_engine: xelatex
+fontsize: 12pt
 mainfont: Arial
 fig_caption: yes
-fontsize: 12pt
 classoption: svgnames
-df_print: paged
 toc: false
 header-includes:
-- \pagenumbering{gobble} 
+- \pagenumbering{gobble}
 - \usepackage{graphicx}
 - \usepackage{fancyhdr}
 - \usepackage{float}
 - \pagestyle{fancy}
 - \addtolength{\headheight}{1.0cm}
 - \rhead{\includegraphics[height=1.2cm]{a-ltips.png}}
-- \renewcommand{\headrulewidth}{0pt} 
-- \fancyfoot[C]{\thepage} 
+- \renewcommand{\headrulewidth}{0pt}
+- \fancyfoot[C]{\thepage}
 - \usepackage[maxfloats=256]{morefloats}
 - \maxdeadcycles=1000
 - \usepackage[justification=raggedright,labelfont=bf,singlelinecheck=true]{caption}
-# pour texte couleur http://ftp.cc.uoc.gr/mirrors/CTAN/macros/latex/contrib/xcolor/xcolor.pdf
 - \usepackage[svgnames]{xcolor}
 - \usepackage{titling}
 - \pretitle{\begin{center}
@@ -33,16 +32,16 @@ header-includes:
 
 ```{r setup, include=FALSE}
 # GET /api/athlete/{id}/wellness?oldest=2021-09-10&newest=2022-01-17
-# "https://intervals.icu/api/athlete/i38318/activities.csv"
+# "https://intervals.icu/api/athlete/5640970/activities.csv"
 # i si profil créer sur intervals et sinon jsute les chiffres si créer avec strava
 # nom athlète
-athlete <- "Francis Juneau"
+athlete <- "David Barry"
 # data
-metriques_csv <- "i38318_activities.csv"
-records_csv <- "athlete_i38318_power_curves.csv"
+metriques_csv <- "5640970_activities.csv"
+records_csv <- "athlete_5640970_power_curves.csv"
 # selection période
 selection_debut <- "2021-01-01"
-selection_fin <- "2021-12-17" 
+selection_fin <- "2021-12-22" 
 # déoucpage période
 intervalle <- "1 month"
 
@@ -261,7 +260,7 @@ metriques_clean <- df_2 %>%
       icu_joules_divised = icu_joules / 10000,
       aigue_7_kj = EMA(icu_joules_divised, n = 1, ratio = 2 / (1 + 7)),
       chronique_42_kj = EMA(icu_joules_divised, n = 1, ratio = 2 / (1 + 42)),
-      fraicheur_kj = round((chronique_42_kj - aigue_7_kj) / 100, digits = 1),
+      fraicheur_kj = (chronique_42_kj - aigue_7_kj) / 100,
       aigue_7_kj_sd = roll_sd(icu_joules_divised, 7, min_obs = 1),
       monotonie_kj = round(aigue_7_kj / aigue_7_kj_sd, digits = 1),
       ACWR_kj = aigue_7_kj / chronique_42_kj,
@@ -302,12 +301,15 @@ metriques_clean <- df_2 %>%
    ) %>%
    # 0 si valeur abbérante
    mutate_if(is.numeric, function(x)
-      ifelse(is.infinite(x), 0, x)) %>% 
+      ifelse(is.infinite(x), 0, x)) %>%
+   # 0 si NaN
+   mutate_if(is.numeric, function(x)
+      ifelse(is.nan(x), 0, x)) %>%  
    # filtrer valeurs abbérantes
    mutate(
       monotonie_kj = ifelse(monotonie_kj >= 10, NA, monotonie_kj)
    )
-
+   
 # déoucpage période
 datebreaks <- seq(as.Date(selection_debut), as.Date(selection_fin), by = intervalle)
 
@@ -322,7 +324,7 @@ records_clean <- records %>%
 
 **Comparaison de différentes méthodes de quantification de la charge d'entraînement**
 
-```{r TL, fig.cap="Méthodes de quantification de la charge d'entraînement externe (Watts, Travail) et interne (Fréquence cardiaque). \\newline{}\\textbf{Charge d'entraînement chronique}: représente la charge globale que votre corps est habitué à supporter (derniers 42 jours). En général, vous pouvez voir la charge chronique comme un indicateur du niveau de forme physique: plus votre corps peut s'entraîner, plus vous êtes en forme. \\newline{}\\textbf{Charge d'entraînement aigue}: représente votre charge d'entraînement au cours de la dernière semaine (derniers 7 jours). En particulier, la charge d'entraînement aigue est liée à la fatigue: l'augmentation de la fréquence des entraînements intenses au cours des derniers jours entraîne une fatigue plus élevée.", fig.width=11, fig.height=12}
+```{r TL, fig.cap="Méthodes de quantification de la charge d'entraînement externe (Watts, Travail) et interne (Fréquence cardiaque). \\newline{}\\textbf{Charge d'entraînement chronique}: représente la charge globale que votre corps est habitué à supporter (derniers 42 jours). En général, vous pouvez voir la charge chronique comme un indicateur du niveau de forme physique: plus votre corps peut s'entraîner, plus vous êtes en forme. \\newline{}\\textbf{Charge d'entraînement aigue}: représente votre charge d'entraînement au cours de la dernière semaine (derniers 7 jours). La charge d'entraînement aigue est liée à la fatigue: l'augmentation de la fréquence des entraînements intenses au cours des derniers jours entraîne une fatigue plus élevée.", fig.width=11, fig.height=11.5}
 gg_tss <-
    ggplot(metriques_clean, aes(date, weight = icu_training_load)) +
    geom_vline(
@@ -391,8 +393,8 @@ gg_kj <-
                     values = alpha("grey"),
                     labels = "Données journalières",
                     drop = FALSE) +
-   labs(y = "Kilojoules simplifiées (kJ)\n", x = "") +
-   ggtitle("Charge: travail simplifiée (kJ)") +
+   labs(y = "Kilojoules simplifiés (kJ)\n", x = "") +
+   ggtitle("Charge: travail simplifié (kJ)") +
    theme_minimal() +
    theme(
       legend.position = "top",
@@ -475,7 +477,7 @@ gg_acwr_kj <-
          "(1.5, Inf]" = "#FF6A6A"
       ),
       labels = c(
-         "Faible charge, risque quelquonce",
+         "Faible charge, risque quelconque",
          "Charge optimale",
          "Risque moyen",
          "Risque élevé"
@@ -601,7 +603,7 @@ graphs <- grid.arrange(
 
 **Aperçu global de la charge d'entraînement et des mesures descriptives**
 
-```{r global,  fig.cap="Évolution de la charge d’entraînement et des mesures descriptives au cours de la saison. \\newline{}\\textbf{Risque de maladaptation}: le rapport entre votre charge d'entraînement chronique et votre charge aigue peut être utilisé pour déterminer le risque de maladaptation ou de blessure. Une charge d'entraînement aigue élevée et une charge d'entraînement chronique faible sont des signes avant-coureurs de maladaptation à l'entraînement puisque nous stressons le corps plus qu'il n'en a l'habitude. \\newline{}\\textbf{Fraîcheur}: la différence entre votre charge chronique (≈forme) et votre charge aigue (≈fatigue) peut être utilisée pour déterminer le niveau de préparation à la performance. Une valeur optimale est généralement un peu au-dessus de zéro. \\newline{}\\textbf{Monotonie}: fait référence à la similitude de l'entraînement sur une période de 7 jours. Une faible monotonie est normalement associée à des méthodes de périodisation alternant des entraînements à haute et basse intensité. Une valeur élevée indique que l'entraînement peut être inefficace et conduire à une stagnation ou à un manque d'amélioration.", fig.width=11, fig.height=10.25}
+```{r global,  fig.cap="Évolution de la charge d’entraînement et des mesures descriptives au cours de la saison. \\newline{}\\textbf{Risque de maladaptation}: le rapport entre votre charge d'entraînement aigue et votre charge chronique peut être utilisé pour déterminer le risque de maladaptation ou de blessure. Une charge d'entraînement aigue élevée et une charge d'entraînement chronique faible sont des signes avant-coureurs de maladaptation à l'entraînement puisque nous stressons le corps plus qu'il n'en a l'habitude. \\newline{}\\textbf{Fraîcheur}: la différence entre votre charge chronique (≈forme) et votre charge aigue (≈fatigue) peut être utilisée pour déterminer le niveau de préparation à la performance. Une valeur optimale est généralement un peu au-dessus de zéro. \\newline{}\\textbf{Monotonie}: fait référence à la similitude de l'entraînement sur une période de 7 jours. Une faible monotonie est normalement associée à des méthodes de périodisation alternant des entraînements à haute et basse intensité. Une valeur élevée indique que l'entraînement peut être inefficace et conduire à une stagnation ou à un manque d'amélioration.", fig.width=11, fig.height=10.15}
 graphs <- grid.arrange(
    arrangeGrob(gg_kj, ncol = 1, nrow = 1),
    arrangeGrob(gg_acwr_kj, ncol = 1, nrow = 1),
@@ -623,76 +625,114 @@ data_cp <- records_clean %>%
       PO = this_season
    ) %>% 
    na.omit() %>% 
-   filter(TTE %in% c(120, 180, 300, 900, 1200))
+   filter(TTE %in% c(180:1200))
 
-data_cp_tab <- data_cp %>% 
-    mutate(
-      TTE = as.factor(TTE),
-      TTE = fct_recode(
-         TTE,
-         "2m @" = "120",
-         "3m @"  = "180",
-         "5m @" = "300",
-         "12m @" = "900",
-         "20m @" = "1200"
-      ),
-      PO = paste0(PO, "W")
-    ) %>% 
-   add_column(
-      "numero" = c("(1)",
-                   "(2)",
-                   "(3)",
-                   "(4)",
-                   "(5)"),
-      .before = "TTE"         
-   ) %>% 
-   mutate(
-      "Sélection records" = paste(numero, TTE, PO)
-   ) 
+# data_cp_tab <- data_cp %>% 
+#     mutate(
+#       TTE = as.factor(TTE),
+#       TTE = fct_recode(
+#          TTE,
+#          "2m @" = "120",
+#          "3m @"  = "180",
+#          "5m @" = "300",
+#          "12m @" = "900",
+#          "20m @" = "1200"
+#       ),
+#       PO = paste0(PO, "W")
+#     ) %>% 
+#    add_column(
+#       "numero" = c("(1)",
+#                    "(2)",
+#                    "(3)",
+#                    "(4)",
+#                    "(5)"),
+#       .before = "TTE"         
+#    ) %>% 
+#    mutate(
+#       "Sélection records" = paste(numero, TTE, PO)
+#    ) 
+# 
+# combinations_results <- critical_power(
+#   .data = data_cp, 
+#   power_output_column = "PO", 
+#   time_to_exhaustion_column = "TTE", 
+#   method = c("3-hyp", "2-hyp", "linear", "1/time"), 
+#   plot = TRUE, 
+#   all_combinations = TRUE,
+#   reverse_y_axis = FALSE
+# ) 
 
-combinations_results <- critical_power(
+simple_results <- critical_power(
   .data = data_cp, 
   power_output_column = "PO", 
   time_to_exhaustion_column = "TTE", 
-  method = c("3-hyp", "2-hyp", "linear", "1/time"), 
+  method = c("1/time"), 
   plot = TRUE, 
-  all_combinations = TRUE,
+  all_combinations = FALSE,
   reverse_y_axis = FALSE
-) 
+)
 
-cp <- combinations_results %>% 
-  slice_min(RMSE, n = 1) %>% 
+# cp <- combinations_results %>% 
+#   slice_min(RMSE, n = 1) %>% 
+#   dplyr::pull(CP)
+# 
+# W <- combinations_results %>% 
+#   slice_min(RMSE, n = 1) %>%
+#   dplyr::pull(`W'`)
+
+cp <- simple_results %>% 
+  filter(method == "1/time") %>% 
   dplyr::pull(CP)
 
-W <- combinations_results %>% 
-  slice_min(RMSE, n = 1) %>%
-  dplyr::pull(`W'`)
+W <- simple_results %>% 
+   filter(method == "1/time") %>% 
+   dplyr::pull(`W'`)
 
 # tableau calculs
-tab_cp <- combinations_results %>%
-   select(index, method, CP:"W' SEE", RMSE) %>%
-   slice_min(RMSE, n = 5) %>%
-   mutate(index = str_extract(index, "(?<=\\[).+?(?=\\])"),
-          index = paste0("(", index, ")")) %>%
-   add_column("Sélection records" = data_cp_tab$`Sélection records`,
-              .before = "index") %>%
-   rename("Combinaison" = "index",
-          "Méthode" = "method") %>%
+tab_cp <- simple_results %>%
+   select(method, CP:"W' SEE", R2, RMSE) %>%
+   filter(method == "1/time") %>% 
+   rename("Méthode" = "method") %>%
    kable(
       escape = FALSE,
-      align = c("l", "c", "c", "c", "c", "c", "c", "c"),
+      align = c("l", "c", "c", "c", "c", "c", "c"),
       booktabs = T,
       linesep = "",
-      caption = "Estimation de la puissance critique à partir d'une combinaisons de 5 records de puissance"
+      caption = "Estimation de la puissance critique et du W' à partir des records de puissance de la saison entre 3 minutes et 20 minutes"
    ) %>%
-   kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+   kable_styling(latex_options = c("hold_position")) %>%
    row_spec(0, bold = T) %>%
    footnote(
       general_title = "",
-      general = "74 combinaisons testées pour 4 méthodes (3-hyp, 2-hyp, linear, 1/time), seules les 5 meilleures sont présentées. 3-hyp, modèle hyperbolique à 3 paramètres; 2-hyp, modèle hyperbolique à 2 paramètres; linear, modèle linéaire; 1/time, modèle linéaire 1/temps; CP, puissance critique; W’, réserve d'énergie > CP; SEE, erreur type de l'estimation; RMSE, erreur quadratique moyenne.",
+      general = "1/time, modèle linéaire 1/temps; CP, puissance critique; W’, réserve d'énergie > CP; SEE, erreur type de l'estimation; R2, coefficient de détermination linéaire de Pearson; RMSE, erreur quadratique moyenne.",
       threeparttable = T,
       fixed_small_size = T
    )
+
+# tab_cp <- simple_results %>%
+#    select(index, method, CP:"W' SEE", RMSE) %>%
+#    slice_min(RMSE, n = 5) %>%
+#    mutate(index = str_extract(index, "(?<=\\[).+?(?=\\])"),
+#           index = paste0("(", index, ")")) %>%
+#    add_column("Sélection records" = data_cp_tab$`Sélection records`,
+#               .before = "index") %>%
+#    rename("Combinaison" = "index",
+#           "Méthode" = "method") %>%
+#    kable(
+#       escape = FALSE,
+#       align = c("l", "c", "c", "c", "c", "c", "c", "c"),
+#       booktabs = T,
+#       linesep = "",
+#       caption = "Estimation de la puissance critique à partir d'une combinaisons de 5 records de puissance"
+#    ) %>%
+#    kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+#    row_spec(0, bold = T) %>%
+#    footnote(
+#       general_title = "",
+#       general = "74 combinaisons testées pour 4 méthodes (3-hyp, 2-hyp, linear, 1/time), seules les 5 meilleures sont présentées. 3-hyp, modèle hyperbolique à 3 paramètres; 2-hyp, modèle hyperbolique à 2 paramètres; linear, modèle linéaire; 1/time, modèle linéaire 1/temps; CP, puissance critique; W’, réserve d'énergie > CP; SEE, erreur type de l'estimation; RMSE, erreur quadratique moyenne.",
+#       threeparttable = T,
+#       fixed_small_size = T
+#    )
 
 tab_cp
 ```
@@ -704,12 +744,12 @@ tab_cp
 
 Puissance critique (CP): **`r round(cp)`**
 $\color{Gray}{\textbf{ | }}$
-W': **`r W`**
+W': **`r round(W)`**
 
-```{r CP, fig.cap="Modèle avec la meilleure combinaison.", results = 'hide', fig.width=11, fig.height=4,}
-gg <- combinations_results %>% 
-  slice_min(RMSE, n = 1) %>% 
-  dplyr::pull(plot)
+```{r CP, fig.cap="Représentation graphique de la modélisation.", results = 'hide'}
+gg <- simple_results %>% 
+   filter(method == "1/time") %>% 
+   dplyr::pull(plot)
 
 gg 
 ```
@@ -891,13 +931,13 @@ df_z_p %>%
    column_spec(7, width = "1.3cm") %>%
    footnote(
       general_title = "",
-      general = "Les zones de puissane sont fondées sur le modèle de Coggan.",
+      general = "Les zones de puissance sont fondées sur le modèle de Coggan.",
       threeparttable = T,
       fixed_small_size = T
    )
 ```
 
-Zones d'entraînement établies à partir d'une fréquence cardiaque maximale de **`r fc_max`** bpm
+Zones d'entraînement établies à partir d'une fréquence cardiaque maximale de **`r fc_max`** bpm (fréquence cardiaque record pour la saison)
 
 ```{r zonesFC}
 zones_fc <- metriques_clean %>%
@@ -1042,9 +1082,9 @@ df_z_fc %>%
 
 \newpage
 
-**Distribution mensuel du volume d'entraînement**
+**Distribution mensuelle du volume d'entraînement**
 
-```{r heuresTID, fig.cap="Heures totales et distribution de l'intensité d'entraînement selon le modèle de 3 zones de puissance (voir tableau des zones d'entraînement pour référence). En sport d'endurance, il est recommandé de limiter le temps d'entraînement en zone 2 pour la majorité de la planification annuelle. Une distribution de l'intensité de type «polarisé» ≈ 80\\% zone 1 et ≈ 20\\% zone 3 semble être optimale pour l'amélioration des performances. Note: il peut y avoir une différence entre les heures totales et le temps par zones si certains entraînements ont été effectués sans capteur de puissance.", fig.width=11, fig.height=12}
+```{r heuresTID, fig.cap="Heures totales et distribution de l'intensité d'entraînement selon le modèle de 3 zones de puissance (voir tableau des zones d'entraînement pour référence). En sport d'endurance, il est recommandé de limiter le temps d'entraînement en zone 2 pour la majorité de la planification annuelle. Une distribution de l'intensité de type « polarisé » ≈ 80\\% zone 1 et ≈ 20\\% zone 3 semble être optimale pour l'amélioration des performances. Note: Il peut y avoir une différence entre les heures totales et le temps par zone si certains entraînements ont été effectués sans capteur de puissance.", fig.width=11, fig.height=12}
 df_heures <- metriques_clean %>% 
    select(date, temps_h) %>%
    group_by(mois = cut(date, "month")) %>%
@@ -1133,7 +1173,7 @@ gg_tid <- metriques_clean %>%
    scale_fill_manual(values = c("#00FA9A", "#EEB422", "#FF6A6A")) +
    labs(y = "Heures (h)\n", x = "") +
    scale_x_date(breaks = datebreaks, date_labels = "%b") +
-   ggtitle("Heures par zones") +
+   ggtitle("Heures par zone") +
    theme_minimal() +
    theme(
       legend.position = "top",
@@ -1192,7 +1232,7 @@ gg_tid_pct <- metriques_clean %>%
    coord_cartesian(ylim = c(min(0), max(100)),
                    expand = TRUE,
                    default = TRUE) +
-   ggtitle("Pourcentages par zones") +
+   ggtitle("Pourcentages par zone") +
    theme_minimal() +
    theme(
       legend.position = "top",
@@ -1218,7 +1258,7 @@ graphs <- grid.arrange(
 
 \newpage
 
-**Résumé de la saison en chiffre selon 4 grandes périodes**
+**Résumé de la saison en chiffres selon 4 grandes périodes**
 
 ```{r tabRES}
 tot_saison <- metriques_clean %>%
@@ -1351,7 +1391,7 @@ knitr::include_graphics("data_norm_u23.png")
 
 **Évolution de la charge externe et interne**
 
-```{r ExtInt,  fig.cap="Comparaison des ratios aigue/chronique de charge externe (kJ) et interne (Fc, LuTRIMP). La zone ombragée (grise) représente l'étendue de variation optimale (faible risque de maladaption / blessure). Les ratios de charge externe et interne sont normalement «couplés» et évoluent ensemble. Lorsqu'il y a un «découplage» entre la charge externe et interne, nous pouvons déceler une variation de l'état d'entraînement. Typiquement, lorsque la charge externe monte plus rapidement que la charge interne, l'athlète est performant et peu fatigué. À l'inverse, lorsque la charge interne monte plus rapidement que la charge externe, l'athlète est possiblement en état de surmenage. Pour une analyse valide, les charges externe et interne doivent avoir été mesurées simultanément sur une période prolongée (vérifier avec les 2 graphiques du bas).", fig.width=11, fig.height=11}
+```{r ExtInt,  fig.cap="Comparaison des ratios aigue/chronique de charge externe (kJ) et interne (Fc, LuTRIMP). La zone ombragée (grise) représente l'étendue de variation optimale (faible risque de maladaption / blessure). Les ratios de charge externe et interne sont normalement « couplés » et évoluent ensemble. Lorsqu'il y a un « découplage » entre la charge externe et interne, nous pouvons déceler une variation de l'état d'entraînement. Typiquement, lorsque la charge externe monte plus rapidement que la charge interne, l'athlète est performant et peu fatigué. À l'inverse, lorsque la charge interne monte plus rapidement que la charge externe, l'athlète est possiblement en état de surmenage. Pour une analyse valide, les charges externe et interne doivent avoir été mesurées simultanément sur une période prolongée (vérifier avec les 2 graphiques du bas).", fig.width=11, fig.height=11}
 gg_kj_lutrimp <- metriques_clean %>%
    ggplot(aes(x = date)) +
    geom_vline(
@@ -1371,12 +1411,12 @@ gg_kj_lutrimp <- metriques_clean %>%
    ) +
    geom_line(
       aes(y = ACWR_kj_ravg,
-          color = "Travail - kJ (chronique/aigue) "),
+          color = "Travail - kJ (aigue/chronique) "),
       size = 1.25
    ) +
    geom_line(
       aes(y = ACWR_lutrimp_ravg,
-          color = "LuTRIMP - Fc (chronique/aigue)"),
+          color = "LuTRIMP - Fc (aigue/chronique)"),
       size = 1.25
    ) +
    scale_y_continuous(breaks = seq(
@@ -1471,7 +1511,7 @@ graphs <- grid.arrange(
 
 **Évolution de l'état d'entraînement et de la performance**
 
-```{r perf, fig.cap="Analyse des variations d'état d'entraînement. La relation entre les variations de charge d'entrainement, la distribution de l'intenstié et les marqueurs d'état d'entraînement et de performance permet de mieux comprendre les conditions favorables et défavorables à la performance. \\newline{}\\textbf{Efficacité aérobie}: relation entre la puissance et la fréquence cardiaque. Intuitivement, une fréquence cardiaque plus basse pour la même puissance se traduit par une meilleure endurance aérobie. De même, une puissance plus élevée à la même fréquence cardiaque est lié à une meilleure endurance aérobie. \\newline{}\\textbf{Estimation CP et W'}: caclulées à patir d'un effort maximal compris entre 180 secondes et 30 minutes mis en relation avec votre profil de record de puissance.", fig.width=11, fig.height=11.5}
+```{r perf, fig.cap="Analyse des variations de l'état d'entraînement. La relation entre les variations de charge d'entraînement, la distribution de l'intensité et les marqueurs d'état d'entraînement et de performance permet de mieux comprendre les conditions favorables et défavorables à la performance. \\newline{}\\textbf{Endurance aérobie}: relation entre la puissance et la fréquence cardiaque. Intuitivement, une fréquence cardiaque plus basse pour la même puissance se traduit par une meilleure endurance aérobie. De même, une puissance plus élevée à la même fréquence cardiaque est liée à une meilleure endurance aérobie. \\newline{}\\textbf{Estimation CP et W'}: calculée à partir d'un effort maximal compris entre 180 secondes et 30 minutes et mis en relation avec votre profil de record de puissance.", fig.width=11, fig.height=11.5}
 gg_tid_pct <- metriques_clean %>%
    select(date, zone1, zone2, zone3) %>%
    group_by(mois = cut(date, "month")) %>%
@@ -1515,7 +1555,7 @@ gg_tid_pct <- metriques_clean %>%
    coord_cartesian(ylim = c(min(0), max(100)),
                    expand = TRUE,
                    default = TRUE) +
-   ggtitle("Distribution intenstité (zones puissance)") +
+   ggtitle("Distribution intensité (zones puissance)") +
    theme_minimal() +
    theme(
       legend.position = "top",
@@ -1594,7 +1634,7 @@ e_perf <- metriques_clean %>%
       icu_pm_w_prime
    ) %>%
    # filtrer seulement sortie avec intensité élevé
-   filter(icu_intensity > 65)
+   filter(icu_intensity > 75)
 
 # df de date pour combler les gap de data
 ts <- seq.POSIXt(as.POSIXct(selection_debut, "%m/%d/%y"), as.POSIXct(selection_fin, "%m/%d/%y"), by="day")
@@ -1684,8 +1724,7 @@ graphs <- grid.arrange(
 
 **Profil de puissance record et résistance à la fatigue**
 
-```{r MMPkJ, fig.cap="Profil de puissance record absolu et suite à un travail de 2000kJ et 3000kJ au cours de la saison. Le degré de diminution de puissance en réponse à un travail donné permet d'apprécier le niveau de résistance à la fatigue. Une résistance à la fatigue élevée, soit une faible différence entre les records de puissance après 2000kJ et 3000kJ est l'un des meilleurs prédicteurs de performance en cyclisme sur route."}
-# y axis 0 to max power by 100
+```{r MMPkJ, fig.cap="Profil de puissance record absolu et suite à un travail de 2000kJ et 3000kJ au cours de la saison. Le degré de diminution de puissance en réponse à un travail donné permet d'apprécier le niveau de résistance à la fatigue. Une résistance à la fatigue élevée, soit une faible différence entre les records de puissance absolus et les records après 2000kJ et 3000kJ, est l'un des meilleurs prédicteurs de performance en cyclisme sur route."}
 mmp <- records_clean %>%
    # garder records 20min et moins
    filter(secs <= 1200) %>%
@@ -1719,10 +1758,10 @@ gg_mmp <- mmp %>%
    ) +
    scale_y_continuous(breaks = seq(
       from = 0,
-      to = max(mmp$watts_kg + 1),
+      to = max(mmp$watts_kg, na.rm = TRUE),
       by = 1
    )) +
-   coord_cartesian(ylim = c(min(0), max(mmp$watts_kg + 1)),
+   coord_cartesian(ylim = c(min(0), max(mmp$watts_kg,  na.rm = TRUE)),
                    expand = TRUE,
                    default = TRUE) +
    labs(y = "Puissance (W/kg)\n",
@@ -1797,7 +1836,7 @@ tab_mmp
 \vspace{12pt}
 \vspace{12pt}
 
-```{r coggan, fig.cap="Charte de record de puissance de Coggan en fonction du niveau de performance. Permet une appréciation générale des forces et faiblesses."}
+```{r coggan, fig.cap="Charte de record de puissance de Coggan en fonction du niveau de performance. Permet une appréciation générale des forces et des faiblesses."}
 coggan_ath_mmp <- records_clean %>%
    filter(secs %in% c(5, 60, 300, 1200)) %>%
    mutate(
@@ -1870,7 +1909,7 @@ df_coggan %>%
          ""
       )
    ) +
-   coord_cartesian(ylim = c(min(0), max(100)),
+   coord_cartesian(ylim = c(min(0), max(110)),
                    expand = TRUE,
                    default = TRUE) +
    labs(y = "", x = "") +
@@ -1895,7 +1934,7 @@ df_coggan %>%
 
 **Exploration des corrélations entre les différentes variables**
 
-```{r corr, fig.cap="Matrice de corrélation. Le coefficient de corrélation R (1 à -1) indique la force de la corrélation et le sens de celle-ci. Lorsque le R est positif (vert), les valeurs des deux variables tendent à augmenter ensemble tandis que lorsque le R est négatif (rouge), les valeurs d’une variable tendent à augmenter lorsque les valeurs de l’autre variable diminuent. Les valeurs R de 1 et -1 représentent chacune des corrélations «parfaites», positive et négative. L'intensité de la couleur et la circonférence des cercles indiquent la valeur de la corrélation R. La probabilité statistique (valeur p) et son niveau de signification est représenté par les symboles \\textbf{*} (0.001 = \\textbf{***}, 0.01 = \\textbf{**}, 0.05 = \\textbf{*}).", fig.width=11, fig.height=12.5}
+```{r corr, fig.cap="Matrice de corrélation. Le coefficient de corrélation R (1 à -1) indique la force de la corrélation et le sens de celle-ci. Lorsque le R est positif (vert), les valeurs des deux variables tendent à augmenter ensemble. Lorsque le R est négatif (rouge), les valeurs d’une variable tendent à augmenter alors que les valeurs de l'autre variable diminuent. Les valeurs R de 1 et -1 représentent chacune des corrélations « parfaites », positive et négative. L'intensité de la couleur et la circonférence des cercles indiquent la valeur de la corrélation R. La probabilité statistique (valeur p) et son niveau de signification sont représentés par le symbole \\textbf{*} (0.001 = \\textbf{***}, 0.01 = \\textbf{**}, 0.05 = \\textbf{*}).", fig.width=11, fig.height=12.5}
 cor_df_7 <- metriques_clean %>%
    select(
       date,
