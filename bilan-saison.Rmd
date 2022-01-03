@@ -35,13 +35,13 @@ header-includes:
 # "https://intervals.icu/api/athlete/5640970/activities.csv"
 # i si profil créer sur intervals et sinon jsute les chiffres si créer avec strava
 # nom athlète
-athlete <- "David Barry"
+athlete <- "Jules Cusson-Fradet"
 # data
-metriques_csv <- "5640970_activities.csv"
-records_csv <- "athlete_5640970_power_curves.csv"
+metriques_csv <- "1867070_activities.csv"
+records_csv <- "athlete_1867070_power_curves.csv"
 # selection période
 selection_debut <- "2021-01-01"
-selection_fin <- "2021-12-22" 
+selection_fin <- "2021-12-31" 
 # déoucpage période
 intervalle <- "1 month"
 
@@ -260,7 +260,7 @@ metriques_clean <- df_2 %>%
       icu_joules_divised = icu_joules / 10000,
       aigue_7_kj = EMA(icu_joules_divised, n = 1, ratio = 2 / (1 + 7)),
       chronique_42_kj = EMA(icu_joules_divised, n = 1, ratio = 2 / (1 + 42)),
-      fraicheur_kj = (chronique_42_kj - aigue_7_kj) / 100,
+      fraicheur_kj = (chronique_42_kj - aigue_7_kj) / 10,
       aigue_7_kj_sd = roll_sd(icu_joules_divised, 7, min_obs = 1),
       monotonie_kj = round(aigue_7_kj / aigue_7_kj_sd, digits = 1),
       ACWR_kj = aigue_7_kj / chronique_42_kj,
@@ -625,6 +625,7 @@ data_cp <- records_clean %>%
       PO = this_season
    ) %>% 
    na.omit() %>% 
+   # records saison entre 3min et 20min
    filter(TTE %in% c(180:1200))
 
 # data_cp_tab <- data_cp %>% 
@@ -691,8 +692,10 @@ W <- simple_results %>%
 # tableau calculs
 tab_cp <- simple_results %>%
    select(method, CP:"W' SEE", R2, RMSE) %>%
-   filter(method == "1/time") %>% 
-   rename("Méthode" = "method") %>%
+   filter(method == "1/time") %>%
+   rename("Méthode" = "method",
+          "CP (Watts)" = CP,
+          "W' (Joules)" = "W'") %>%
    kable(
       escape = FALSE,
       align = c("l", "c", "c", "c", "c", "c", "c"),
@@ -1261,7 +1264,15 @@ graphs <- grid.arrange(
 **Résumé de la saison en chiffres selon 4 grandes périodes**
 
 ```{r tabRES}
-tot_saison <- metriques_clean %>%
+# joindre les valeurs CP et W calculées pour la saison avec record 3m-20m avec df metriques_clean
+merge_cp_w <- merge(cp, W, all = TRUE) %>%
+   rename(CP = x,
+          W = y)
+
+merge_cp_w_metriques <- merge(merge_cp_w, metriques_clean, all = TRUE)
+
+# total saisomn
+tot_saison <- merge_cp_w_metriques %>%
    select(date,
           temps_h,
           icu_kj,
@@ -1270,7 +1281,9 @@ tot_saison <- metriques_clean %>%
           lutrimp_h,
           zone1_h,
           zone2_h,
-          zone3_h) %>%
+          zone3_h,
+          CP,
+          W) %>%
    mutate(
       temps_h = sum(temps_h),
       icu_kj = sum(icu_kj),
@@ -1290,11 +1303,13 @@ tot_saison <- metriques_clean %>%
       "LuTRIMP/h" = lutrimp_h,
       "Zone 1 (h)" = zone1_h,
       "Zone 2 (h)" = zone2_h,
-      "Zone 3 (h)" = zone3_h
+      "Zone 3 (h)" = zone3_h,
+      "CP (Watts)" = CP,
+      "W' (Joules)" = W
    ) %>%
    select(-1) %>% 
    distinct() %>% 
-   pivot_longer(cols = 1:8,
+   pivot_longer(cols = 1:10,
                 names_to = "Variables",
                 values_to = "Saison") 
 
@@ -1307,7 +1322,9 @@ tab_resume <- metriques_clean %>%
           lutrimp_h,
           zone1_h,
           zone2_h,
-          zone3_h) %>%
+          zone3_h,
+          icu_pm_cp,
+          icu_pm_w_prime) %>%
    # séparer la saion en 4
    mutate(Q = quarter(date)) %>%
    mutate(
@@ -1329,7 +1346,9 @@ tab_resume <- metriques_clean %>%
       lutrimp_h = mean(lutrimp_h),
       zone1_h = sum(zone1_h, na.rm = TRUE),
       zone2_h = sum(zone2_h, na.rm = TRUE),
-      zone3_h = sum(zone3_h, na.rm = TRUE)
+      zone3_h = sum(zone3_h, na.rm = TRUE),
+      icu_pm_cp = max(icu_pm_cp, na.rm = TRUE),
+      icu_pm_w_prime = max(icu_pm_w_prime, na.rm = TRUE)
    ) %>% 
    mutate_if(is.numeric, round) %>%
    rename(
@@ -1340,11 +1359,13 @@ tab_resume <- metriques_clean %>%
       "LuTRIMP/h" = lutrimp_h,
       "Zone 1 (h)" = zone1_h,
       "Zone 2 (h)" = zone2_h,
-      "Zone 3 (h)" = zone3_h
+      "Zone 3 (h)" = zone3_h,
+      "CP (Watts)" = icu_pm_cp,
+      "W' (Joules)" = icu_pm_w_prime
    ) %>%
    select(-1) %>% 
    distinct() %>% 
-   pivot_longer(cols = 1:8,
+   pivot_longer(cols = 1:10,
                 names_to = "Variables",
                 values_to = "data") %>%
    pivot_wider(names_from = Q, values_from = data) 
@@ -1360,7 +1381,9 @@ df_res <- merge(tot_saison, tab_resume, all = TRUE) %>%
          "LuTRIMP/h",
          "Zone 1 (h)",
          "Zone 2 (h)",
-         "Zone 3 (h)"
+         "Zone 3 (h)",
+         "CP (Watts)",
+         "W' (Joules)"
       )
    )) %>%
    arrange(Variables)  
@@ -1420,11 +1443,11 @@ gg_kj_lutrimp <- metriques_clean %>%
       size = 1.25
    ) +
    scale_y_continuous(breaks = seq(
-      from = 0,
-      to = max(2.5),
-      by = 0.5
+      from = 0.2,
+      to = max(2),
+      by = 0.4
    )) +
-   coord_cartesian(ylim = c(min(0), max(2.5)),
+   coord_cartesian(ylim = c(min(0.2), max(2)),
                    expand = TRUE,
                    default = TRUE) +
    labs(x = "", y = "(aigue/chronique)\n") +
@@ -1601,11 +1624,11 @@ gg_aero <- metriques_clean %>%
       drop = FALSE
    ) +
     scale_y_continuous(breaks = seq(
-      from = min(0),
-      to = max(2.5),
-      by = 0.5
+      from = min(0.4),
+      to = max(1.8),
+      by = 0.4
    )) +
-   coord_cartesian(ylim = c(min(0), max(2.5)),
+   coord_cartesian(ylim = c(min(0.4), max(1.8)),
                    expand = TRUE,
                    default = TRUE) +
    labs(x = "", y = "(Watts moy / Fc moy)\n") +
