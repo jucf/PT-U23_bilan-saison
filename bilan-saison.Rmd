@@ -307,7 +307,7 @@ metriques_clean <- df_2 %>%
       ifelse(is.nan(x), 0, x)) %>%  
    # filtrer valeurs abbérantes
    mutate(
-      monotonie_kj = ifelse(monotonie_kj >= 10, NA, monotonie_kj)
+      monotonie_kj = ifelse(monotonie_kj >= 10, "0", monotonie_kj)
    )
    
 # déoucpage période
