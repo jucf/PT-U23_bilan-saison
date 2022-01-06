@@ -261,8 +261,17 @@ metriques_clean <- df_2 %>%
       aigue_7_kj = EMA(icu_joules_divised, n = 1, ratio = 2 / (1 + 7)),
       chronique_42_kj = EMA(icu_joules_divised, n = 1, ratio = 2 / (1 + 42)),
       fraicheur_kj = (chronique_42_kj - aigue_7_kj) / 10,
-      aigue_7_kj_sd = roll_sd(icu_joules_divised, 7, min_obs = 1),
-      monotonie_kj = round(aigue_7_kj / aigue_7_kj_sd, digits = 1),
+      icu_joules_divised_7 = rollapply(
+      icu_joules_divised, 
+      7,
+      mean,
+      na.rm = TRUE,
+      fill = NA,
+      align = 'right',
+      partial = TRUE
+    ),
+      icu_joules_divised_7_sd = roll_sd(icu_joules_divised, 7, min_obs = 1),
+      monotonie_kj = round(icu_joules_divised_7 / icu_joules_divised_7_sd, digits = 1),
       ACWR_kj = aigue_7_kj / chronique_42_kj,
       ACWR_kj_ravg = rollapply(
          ACWR_kj,
