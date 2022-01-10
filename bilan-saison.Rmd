@@ -32,7 +32,7 @@ header-includes:
 
 ```{r setup, include=FALSE}
 # GET /api/athlete/{id}/wellness?oldest=2021-09-10&newest=2022-01-17
-# "https://intervals.icu/api/athlete/5640970/activities.csv"
+# "https://intervals.icu/api/athlete/i38205/activities.csv"
 # i si profil créer sur intervals et sinon jsute les chiffres si créer avec strava
 # nom athlète
 athlete <- "Jules Cusson-Fradet"
@@ -322,12 +322,19 @@ metriques_clean <- df_2 %>%
 # déoucpage période
 datebreaks <- seq(as.Date(selection_debut), as.Date(selection_fin), by = intervalle)
 
-records_clean <- records %>% 
-   janitor::clean_names() %>% 
+records_clean <- records %>%
+   janitor::clean_names() %>%
+   # sélectionner première 4 cols pour l'année coutante filtrer via intervals.icu
+   select(1:4) %>%
+   rename(
+      "saison" = 2,
+      "saison_2000_kj" = 3,
+      "saison_3000_kj" = 4
+   ) %>%
    mutate(
-     this_season_wkg = round(this_season / poids_kg$icu_weight, digits = 1),
-      this_season_2000k_j_wkg = round(this_season_2000k_j / poids_kg$icu_weight, digits = 1),
-      this_season_3000k_j_wkg = round(this_season_3000k_j / poids_kg$icu_weight, digits = 1)
+      saison_wkg = round(saison / poids_kg$icu_weight, digits = 1),
+      saison_2000_kj_wkg = round(saison_2000_kj / poids_kg$icu_weight, digits = 1),
+      saison_3000_kj_wkg = round(saison_3000_kj / poids_kg$icu_weight, digits = 1)
    )
 ```
 
@@ -628,10 +635,10 @@ graphs <- grid.arrange(
 
 ```{r tabCP}
 data_cp <- records_clean %>% 
-   select(secs, this_season) %>% 
+   select(secs, saison) %>% 
    rename(
       TTE = secs,
-      PO = this_season
+      PO = saison
    ) %>% 
    na.omit() %>% 
    # records saison entre 3min et 20min
@@ -1761,16 +1768,16 @@ mmp <- records_clean %>%
    # garder records 20min et moins
    filter(secs <= 1200) %>%
    pivot_longer(
-      cols = c(this_season_wkg:this_season_3000k_j_wkg),
+      cols = c(saison_wkg:saison_3000_kj_wkg),
       names_to = "records",
       values_to = "watts_kg"
    ) %>%
    mutate(
       records = fct_recode(
          records,
-         "Records saison" = "this_season_wkg",
-         "Records après 2000 kJ" = "this_season_2000k_j_wkg",
-         "Records après 3000 kJ" = "this_season_3000k_j_wkg"
+         "Records saison" = "saison_wkg",
+         "Records après 2000 kJ" = "saison_2000_kj_wkg",
+         "Records après 3000 kJ" = "saison_3000_kj_wkg"
       ),
       records = factor(
          records,
@@ -1825,7 +1832,7 @@ knitr::include_graphics("mmp_u23.png")
 
 ```{r tableauMMP}
 tab_mmp <- records_clean %>%
-   select(secs, this_season:this_season_3000k_j, this_season_wkg:this_season_3000k_j_wkg) %>%
+   select(secs, saison:saison_3000_kj, saison_wkg:saison_3000_kj_wkg) %>%
    filter(secs %in% c(1, 5, 15, 30, 60, 120, 300, 720, 1200)) %>%
    rename(Temps = secs) %>%
    mutate(
@@ -1844,12 +1851,12 @@ tab_mmp <- records_clean %>%
       )
    ) %>%
    rename(
-         "Records saison (W)" = "this_season",
-         "Records après 2000 kJ (W)" = "this_season_2000k_j",
-         "Records après 3000 kJ (W)" = "this_season_3000k_j",
-         "Records saison (W/kg)" = "this_season_wkg",
-         "Records après 2000 kJ (W/kg)" = "this_season_2000k_j_wkg",
-         "Records après 3000 kJ (W/kg)" = "this_season_3000k_j_wkg"
+         "Records saison (W)" = "saison",
+         "Records après 2000 kJ (W)" = "saison_2000_kj",
+         "Records après 3000 kJ (W)" = "saison_3000_kj",
+         "Records saison (W/kg)" = "saison_wkg",
+         "Records après 2000 kJ (W/kg)" = "saison_2000_kj_wkg",
+         "Records après 3000 kJ (W/kg)" = "saison_3000_kj_wkg"
    ) %>% 
    select(1, 5, 2, 6, 3, 7, 4) %>%                     
    kable(
@@ -1881,10 +1888,10 @@ coggan_ath_mmp <- records_clean %>%
          "20m" = "1200"
       )
    ) %>%
-   select(secs, this_season_wkg) %>% 
+   select(secs, saison_wkg) %>% 
    rename(
       "temps" = "secs",
-      "wkg" = "this_season_wkg"
+      "wkg" = "saison_wkg"
    ) %>% 
    add_column("df" = athlete) 
 
