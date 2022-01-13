@@ -32,7 +32,7 @@ header-includes:
 
 ```{r setup, include=FALSE}
 # GET /api/athlete/{id}/wellness?oldest=2021-09-10&newest=2022-01-17
-# "https://intervals.icu/api/athlete/i38205/activities.csv"
+# https://intervals.icu/api/athlete/i38205/activities.csv
 # i si profil créer sur intervals et sinon jsute les chiffres si créer avec strava
 # nom athlète
 athlete <- "Jules Cusson-Fradet"
@@ -867,12 +867,12 @@ df_z_p <- merge(zones_p, lab_p, all = TRUE) %>%
           "CP (\\%)",
           Puissance) %>%
    add_column(
-      "RPE (Borg, 0-10)" = c("≤ 2",
-                             "2 - 3",
-                             "4 - 5",
-                             "5 - 6",
-                             "7 - +",
-                             "≥ 8",
+      "RPE (Borg, 0-100)" = c("≤ 12",
+                             "12 - 23",
+                             "35 - 50",
+                             "50 - 60",
+                             "70 - +",
+                             "≥ 80",
                              "max"),
       .after = "Puissance"
    ) %>%
@@ -886,7 +886,7 @@ df_z_p <- merge(zones_p, lab_p, all = TRUE) %>%
          "5 - 15 min",
          "< 5 min"
       ),
-      .after = "RPE (Borg, 0-10)"
+      .after = "RPE (Borg, 0-100)"
    ) %>%
    add_column("Zones (3)" = c("Z1",
                               "",
@@ -945,7 +945,7 @@ df_z_p %>%
    kable_styling(latex_options = c("striped", "scale_down", "hold_position")) %>%
    row_spec(0, bold = T) %>%
    column_spec(1, width = "1.3cm") %>%
-   column_spec(5, width = "1.3cm") %>%
+   column_spec(5, width = "1.4cm") %>%
    column_spec(6, width = "1.8cm") %>%
    column_spec(7, width = "1.3cm") %>%
    footnote(
@@ -1023,11 +1023,11 @@ df_z_fc <- merge(zones_fc, lab_fc, all = TRUE) %>%
           Description,
           "Fc max (\\%)",
           "Fréquence cardiaque") %>%
-   add_column("RPE (Borg, 0-10)" = c("≤ 2",
-                                     "2 - 3",
-                                     "4 - 6",
-                                     "6 - 7",
-                                     "7 - max"),
+   add_column("RPE (Borg, 0-100)" = c("≤ 12",
+                                     "12 - 23",
+                                     "35 - 60",
+                                     "60 - 70",
+                                     "70 - max"),
               .after = "Fréquence cardiaque") %>%
    add_column(
       "Temps typique accumulé" = c("1 - 6 h",
@@ -1035,7 +1035,7 @@ df_z_fc <- merge(zones_fc, lab_fc, all = TRUE) %>%
                                    "50 - 90 min",
                                    "30 - 60 min",
                                    "15 - 30 min"),
-      .after = "RPE (Borg, 0-10)"
+      .after = "RPE (Borg, 0-100)"
    ) %>%
    add_column("Zones (3)" = c("Z1",
                               "",
@@ -1088,7 +1088,7 @@ df_z_fc %>%
    kable_styling(latex_options = c("striped", "scale_down", "hold_position")) %>%
    row_spec(0, bold = T) %>%
    column_spec(1, width = "1.3cm") %>%
-   column_spec(5, width = "1.3cm") %>%
+   column_spec(5, width = "1.4cm") %>%
    column_spec(6, width = "1.8cm") %>%
    column_spec(7, width = "1.3cm") %>%
    footnote(
@@ -1875,7 +1875,7 @@ tab_mmp
 \vspace{12pt}
 \vspace{12pt}
 
-```{r coggan, fig.cap="Charte de record de puissance de Coggan en fonction du niveau de performance. Permet une appréciation générale des forces et des faiblesses."}
+```{r coggan, fig.cap="Adaptation de la charte de record de puissance de Coggan en fonction du niveau de performance (à titre informatif seulement). Permet une appréciation générale des forces et des faiblesses."}
 coggan_ath_mmp <- records_clean %>%
    filter(secs %in% c(5, 60, 300, 1200)) %>%
    mutate(
