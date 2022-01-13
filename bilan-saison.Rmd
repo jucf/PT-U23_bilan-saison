@@ -108,7 +108,7 @@ date: `r nom_yaml`
 \center Analyse et production \center
 \center __Jules Cusson-Fradet__, M.Sc. \center
 \center Candidat au doctorat \center
-\center Laboratoire de technologies & d’innovation pour la performance sportive (L-tips) \center
+\center Laboratoire de technologies & d’innovation pour la performance sportive (L-Tips) \center
 
 ```{r cleaning}
 metriques <- read_csv(metriques_csv)
@@ -1670,10 +1670,10 @@ e_perf <- metriques_clean %>%
       date,
       icu_intensity,
       icu_pm_cp,
-      icu_pm_w_prime
-   ) %>%
-   # filtrer seulement sortie avec intensité élevé
-   filter(icu_intensity > 75)
+      icu_pm_w_prime)
+   # ) %>%
+   # # filtrer seulement sortie avec intensité élevé
+   # filter(icu_intensity > 75)
 
 # df de date pour combler les gap de data
 ts <- seq.POSIXt(as.POSIXct(selection_debut, "%m/%d/%y"), as.POSIXct(selection_fin, "%m/%d/%y"), by="day")
@@ -1682,7 +1682,7 @@ df <- data.frame(date=ts)
 # joindre avec df original
 df_full <- full_join(df,e_perf) %>% 
    mutate(date = as.Date(date)) %>% 
-   # remplacer NA par dernière valeur pour évuter drop data
+   # remplacer NA par dernière valeur pour éviter drop data
    na.locf(na.rm = FALSE)
 
 gg_ecp <- ggplot(df_full, aes(date, icu_pm_cp)) +
