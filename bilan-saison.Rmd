@@ -23,6 +23,7 @@ header-includes:
 - \usepackage[maxfloats=256]{morefloats}
 - \maxdeadcycles=1000
 - \usepackage[justification=raggedright,labelfont=bf,singlelinecheck=true]{caption}
+- \usepackage[labelsep=period]{caption}
 - \usepackage{titling}
 - \pretitle{\begin{center}
 - \includegraphics[width=6.5 in,height=20in]{bannière-facebook_ltips.jpeg}\LARGE\\}
@@ -34,10 +35,10 @@ header-includes:
 # https://intervals.icu/api/athlete/i38205/activities.csv
 # i si profil créer sur intervals et sinon jsute les chiffres si créer avec strava
 # nom athlète
-athlete <- "Jules Cusson-Fradet"
+athlete <- "Charles-Étienne Chrétien"
 # data
-metriques_csv <- "1867070_activities.csv"
-records_csv <- "athlete_1867070_power_curves.csv"
+metriques_csv <- "i48443_activities.csv"
+records_csv <- "athlete_i48443_power_curves.csv"
 # selection période
 selection_debut <- "2021-01-01"
 selection_fin <- "2021-12-31" 
@@ -102,10 +103,10 @@ date: `r nom_yaml`
 \vspace{12pt}
 \vspace{12pt}
 
-\center Analyse et production \center
-\center __Jules Cusson-Fradet__, M.Sc. \center
-\center Candidat au doctorat \center
-\center Laboratoire de technologies & d’innovation pour la performance sportive (L-Tips) \center
+\center Analyse et production \center 
+\center __Jules Cusson-Fradet__, M.Sc. \center 
+\center Candidat au doctorat \center 
+\center Laboratoire de technologies & d'innovation pour la performance sportive (L-Tips) \center
 
 \newpage
 
@@ -758,18 +759,50 @@ tab_cp
 \vspace{12pt}
 \vspace{12pt}
 
-\centering
+```{r CP, fig.cap="Représentation graphique de la modélisation."}
+gg_cp <- data_cp %>%
+   mutate(cp_model = cp + W / TTE) 
 
-Puissance critique (CP): **`r round(cp)`**
-$\color{gray}{\textbf{ | }}$
-W': **`r round(W)`**
+gg <- gg_cp %>% 
+   ggplot(aes(x = TTE)) +
+   geom_line(aes(y = PO,
+                 colour = "Profil de puissance record"),
+             size = 1.25) +
+   geom_line(aes(y = cp_model,
+                 colour = "Profil de puissance modélisé"),
+             size = 1.25) +
+   scale_color_manual(
+      name = "",
+      values = alpha(c("red",
+                       "#6633CC"), .6),
+      drop = FALSE,
+      guide = guide_legend(reverse = TRUE)
+   ) +
+   scale_y_continuous(breaks = seq(
+      from = min(round(gg_cp$cp_model -20), na.rm = TRUE),
+      to = max(round(gg_cp$cp_model +10), na.rm = TRUE),
+      by = 10
+   )) +
+   coord_cartesian(ylim = c(min(round(gg_cp$cp_model -20), na.rm = TRUE), max(round(gg_cp$cp_model +10), na.rm = TRUE)),
+                   expand = TRUE,
+                   default = TRUE) +
+   scale_x_time() +
+   labs(y = "Puissance (Watts)\n",
+        x = "\nTemps (h:m:s)",
+        color = "") +
+   ggtitle("") +
+   theme_minimal() +
+   theme(
+      axis.text.x = element_text(colour = "#A6A6A6"),
+      axis.text.y = element_text(colour = "#A6A6A6"),
+      axis.title.x = element_text(colour = "#A6A6A6"),
+      axis.title.y = element_text(colour = "#A6A6A6"),
+      panel.grid.minor.y = element_blank(),
+      panel.grid.minor.x = element_blank(),
+      legend.position = "top"
+   )
 
-```{r CP, fig.cap="Représentation graphique de la modélisation.", results = 'hide'}
-gg <- simple_results %>% 
-   filter(method == "1/time") %>% 
-   dplyr::pull(plot)
-
-gg 
+gg
 ```
 
 \newpage
@@ -955,6 +988,9 @@ df_z_p %>%
   )
 ```
 
+\vspace{12pt}
+\vspace{12pt}
+
 Zones d'entraînement établies à partir d'une fréquence cardiaque maximale de **`r fc_max`** bpm (fréquence cardiaque record pour la saison)
 
 ```{r zonesFC}
@@ -1105,7 +1141,7 @@ df_z_fc %>%
 
 **Distribution mensuelle du volume d'entraînement**
 
-```{r heuresTID, fig.cap="Heures totales et distribution de l'intensité d'entraînement selon le modèle de 3 zones de puissance (voir tableau des zones d'entraînement pour référence). En sport d'endurance, il est recommandé de limiter le temps d'entraînement en zone 2 pour la majorité de la planification annuelle. Une distribution de l'intensité de type « polarisé » ≈ 80\\% zone 1 et ≈ 20\\% zone 3 semble être optimale pour l'amélioration des performances. Note: Il peut y avoir une différence entre les heures totales et le temps par zone si certains entraînements ont été effectués sans capteur de puissance.", fig.width=11, fig.height=12}
+```{r heuresTID, fig.cap="Heures totales et distribution de l'intensité d'entraînement selon le modèle de 3 zones de puissance (voir tableau des zones d'entraînement pour référence). En sport d'endurance, une distribution de l'intensité de type « pyramidale » (grande proportion en zone 1, suivie d'une proportion décroissante dans les zones 2 et 3) ou « polarisé » (≈ 80\\% zone 1 et ≈ 20\\% zone 3) semble maximiser les performances d'endurance. Note: Il peut y avoir une différence entre les heures totales et le temps par zone si certains entraînements ont été effectués sans capteur de puissance.", fig.width=11, fig.height=12}
 df_heures <- metriques_clean %>% 
    select(date, temps_h) %>%
    group_by(mois = cut(date, "month")) %>%
@@ -1452,7 +1488,7 @@ gg_kj_lutrimp <- metriques_clean %>%
    ) +
    geom_line(
       aes(y = ACWR_kj_ravg,
-          color = "Travail - kJ (aigue/chronique) "),
+          color = "Travail - kJ (aigue/chronique)"),
       size = 1.25
    ) +
    geom_line(
@@ -1798,11 +1834,11 @@ gg_mmp <- mmp %>%
       labels = c("1s", "5s", "15s", "30s", "1m", "2m", "5m", "12m", "20m")
    ) +
    scale_y_continuous(breaks = seq(
-      from = 0,
-      to = max(mmp$watts_kg, na.rm = TRUE),
+      from = min(round(mmp$watts_kg -1),  na.rm = TRUE),
+      to = max(round(mmp$watts_kg +1), na.rm = TRUE),
       by = 1
    )) +
-   coord_cartesian(ylim = c(min(0), max(mmp$watts_kg,  na.rm = TRUE)),
+   coord_cartesian(ylim = c(min(round(mmp$watts_kg -1),  na.rm = TRUE), max(round(mmp$watts_kg +1),  na.rm = TRUE)),
                    expand = TRUE,
                    default = TRUE) +
    labs(y = "Puissance (W/kg)\n",
@@ -2129,5 +2165,3 @@ col <- colorRampPalette(c("#FF6A6A", "white", "#00FA9A"))(20)
 
 corrplot(M, p.mat = testRes$p, insig = 'label_sig', sig.level = c(0.001, 0.01, 0.05), pch.cex = 0.9, pch.col = 'grey20', method="circle", tl.col = "black", tl.cex=0.65, tl.srt = 45, col = col)
 ```
-
-
