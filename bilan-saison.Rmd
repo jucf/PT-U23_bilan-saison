@@ -35,10 +35,10 @@ header-includes:
 # https://intervals.icu/api/athlete/i38205/activities.csv
 # i si profil créer sur intervals et sinon jsute les chiffres si créer avec strava
 # nom athlète
-athlete <- "Charles-Étienne Chrétien"
+athlete <- "Jules Cusson-Fradet"
 # data
-metriques_csv <- "i48443_activities.csv"
-records_csv <- "athlete_i48443_power_curves.csv"
+metriques_csv <- "1867070_activities.csv"
+records_csv <- "athlete_1867070_power_curves.csv"
 # selection période
 selection_debut <- "2021-01-01"
 selection_fin <- "2021-12-31" 
