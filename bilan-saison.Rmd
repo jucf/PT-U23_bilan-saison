@@ -5,12 +5,19 @@ df_print: paged
 output:
   pdf_document:
     latex_engine: xelatex
-fontsize: 10pt
+bibliography: /Users/julescusson-fradet/Library/CloudStorage/GoogleDrive-jules.cusson.fradet@gmail.com/Mon disque/paperpile.bib
+csl: apa-6th-edition.csl
+urlcolor: blue
+linkcolor: black
+fontsize: 11pt
 mainfont: Arial
 fig_caption: yes
 classoption: svgnames
 toc: false
 header-includes:
+- \usepackage{makecell}
+- \usepackage{booktabs}
+- \usepackage{colortbl}
 - \pagenumbering{gobble}
 - \usepackage{graphicx}
 - \usepackage{fancyhdr}
@@ -22,26 +29,30 @@ header-includes:
 - \fancyfoot[C]{\thepage}
 - \usepackage[maxfloats=256]{morefloats}
 - \maxdeadcycles=1000
-- \usepackage[justification=raggedright,labelfont=bf,singlelinecheck=true]{caption}
+- \usepackage[justification=raggedright,labelfont=bf,singlelinecheck=false]{caption}
 - \usepackage[labelsep=period]{caption}
 - \usepackage{titling}
 - \pretitle{\begin{center}
 - \includegraphics[width=6.5 in,height=20in]{bannière-facebook_ltips.jpeg}\LARGE\\}
 - \posttitle{\end{center}}
+# remove left headers
+- \fancyhead[LO]{}
+- \renewcommand{\contentsname}{}
+- \usepackage{ragged2e}
 ---
 
 ```{r setup, include=FALSE}
 # GET /api/athlete/{id}/wellness?oldest=2021-09-10&newest=2022-01-17
-# https://intervals.icu/api/athlete/i38205/activities.csv
+# https://intervals.icu/api/athlete/i49736/activities.csv
 # i si profil créer sur intervals et sinon jsute les chiffres si créer avec strava
 # nom athlète
-athlete <- "Jules Cusson-Fradet"
+athlete <- "Hugo Houle"
 # data
-metriques_csv <- "1867070_activities.csv"
-records_csv <- "athlete_1867070_power_curves.csv"
+metriques_csv <- "i83924_activities.csv"
+records_csv <- "athlete_i83924_power_curves_2021-2022.csv"
 # selection période
-selection_debut <- "2021-01-01"
-selection_fin <- "2021-12-31" 
+selection_debut <- "2021-10-01"
+selection_fin <- "2022-08-31" 
 # déoucpage période
 intervalle <- "1 month"
 
@@ -69,8 +80,6 @@ library(googlesheets4)
 library(forcats)
 library(knitr)
 library(kableExtra)
-library(plotly)
-library(webshot)
 library(forcats)
 library(RCurl)
 library(httr)
@@ -103,12 +112,29 @@ date: `r nom_yaml`
 \vspace{12pt}
 \vspace{12pt}
 
-\center Analyse et production \center 
-\center __Jules Cusson-Fradet__, M.Sc. \center 
-\center Candidat au doctorat \center 
-\center Laboratoire de technologies & d'innovation pour la performance sportive (L-Tips) \center
+\center 
+
+Préparé par:
+
+**Jules Cusson-Fradet**, M.Sc. 
+
+Candidat au doctorat 
+
+Laboratoire de technologies & d'innovation pour la performance sportive (L-Tips) 
 
 \newpage
+
+**Tables des matières**
+
+\vspace{-1cm}
+
+\tableofcontents
+
+\newpage
+
+\pagenumbering{arabic}
+
+\raggedright
 
 ```{r cleaning}
 metriques <- read_csv(metriques_csv)
@@ -215,6 +241,8 @@ poids_kg <- df_2 %>%
 metriques_clean <- df_2 %>%
    # selection période
    filter(between(date, as.Date(selection_debut), as.Date(selection_fin))) %>%
+   # filter(date != "2021-04-15", 
+   #        date != "2021-04-23") |> pour erreur Fc Houle 2020-2021
    # création des variables
    group_by(date) %>%
    mutate(
@@ -295,36 +323,82 @@ metriques_clean <- df_2 %>%
       ),
       efficacite_aerobique_ravg60 = rollapply(
          efficacite_aerobique,
-         60,
+         42,
          mean,
          na.rm = TRUE,
          fill = NA,
          align = 'right',
          partial = TRUE
       ),
-      efficacite_aerobique_norm = 0.75 * (roll_sd(efficacite_aerobique, 60, min_obs = 1)),
+      efficacite_aerobique_norm = 0.75 * (roll_sd(efficacite_aerobique, 42, min_obs = 1)),
       # conversions
       temps_h = round(moving_time / 3600, digits = 1),
       kj_h = icu_kj / temps_h,
       lutrimp_h = lutrimp / temps_h
    ) %>%
-   # 0 si valeur abbérante
+   # 0 si valeur aberrante
    mutate_if(is.numeric, function(x)
       ifelse(is.infinite(x), 0, x)) %>%
    # 0 si NaN
    mutate_if(is.numeric, function(x)
-      ifelse(is.nan(x), 0, x)) %>%  
-   # filtrer valeurs abbérantes
-   mutate(
-      monotonie_kj = ifelse(monotonie_kj >= 10, "0", monotonie_kj)
-   )
+      ifelse(is.nan(x), 0, x)) |> 
+   #  valeur aberrante monotonie
+   mutate(monotonie_kj = ifelse(monotonie_kj > 5, monotonie_kj == 5, monotonie_kj))
+
+# calculer charge ext et int en gardant uniquement jour trimp et kj
+metriques_ext_int <- metriques_clean %>%
+  select(
+    date,
+    lutrimp_divised,
+    icu_joules_divised
+  ) %>%
+  filter_if(is.numeric, all_vars((.) != 0)) %>%
+  mutate(
+    aigue_7_lutrimp_g_nrpe = EMA(lutrimp_divised, n = 1, ratio = 2 / (1 + 7)),
+    chronique_42_lutrimp_g_nrpe = EMA(lutrimp_divised, n = 1, ratio = 2 / (1 + 42)),
+    ACWR_lutrimp_g_nrpe = aigue_7_lutrimp_g_nrpe / chronique_42_lutrimp_g_nrpe,
+    aigue_7_kj_g_nrpe = EMA(icu_joules_divised, n = 1, ratio = 2 / (1 + 7)),
+    chronique_42_kj_g_nrpe = EMA(icu_joules_divised, n = 1, ratio = 2 / (1 + 42)),
+    ACWR_kj_g_nrpe = aigue_7_kj_g_nrpe / chronique_42_kj_g_nrpe,
+    # roll avg pour mieux voir tendances
+    ACWR_lutrimp_g_nrpe_ravg = rollapply(
+      ACWR_lutrimp_g_nrpe,
+      7,
+      mean,
+      na.rm = TRUE,
+      fill = NA,
+      align = 'right',
+      partial = TRUE
+    ),
+    ACWR_kj_g_nrpe_ravg = rollapply(
+      ACWR_kj_g_nrpe,
+      7,
+      mean,
+      na.rm = TRUE,
+      fill = NA,
+      align = 'right',
+      partial = TRUE
+    ),
+    ACWR_lutrimp_g_nrpe_ravg_sd = roll_sd(ACWR_lutrimp_g_nrpe_ravg, 7, min_obs = 1),
+    ACWR_kj_g_nrpe_ravg_sd = roll_sd(ACWR_kj_g_nrpe_ravg, 7, min_obs = 1)
+  )
+
+metriques_clean <-
+  merge(metriques_ext_int,
+        metriques_clean,
+        by = c("date"),
+        all = TRUE) %>%
+  # drop duplicate col de df #1 "x"
+  rename_at(vars(ends_with(".y")),
+            ~ str_replace(., "\\..$", "")) %>%
+  select_at(vars(-ends_with(".x"))) 
    
-# déoucpage période
+# déoucpage période graph
 datebreaks <- seq(as.Date(selection_debut), as.Date(selection_fin), by = intervalle)
 
 records_clean <- records %>%
    janitor::clean_names() %>%
-   # sélectionner première 4 cols pour l'année coutante filtrer via intervals.icu
+   # sélectionner première 4 cols pour l'année courante filtrer via intervals.icu
    select(1:4) %>%
    rename(
       "saison" = 2,
@@ -338,9 +412,197 @@ records_clean <- records %>%
    )
 ```
 
-**Comparaison de différentes méthodes de quantification de la charge d'entraînement**
+\newpage
 
-```{r TL, fig.cap="Méthodes de quantification de la charge d'entraînement externe (Watts, Travail) et interne (Fréquence cardiaque). \\newline{}\\textbf{Charge d'entraînement chronique}: représente la charge globale que votre corps est habitué à supporter (derniers 42 jours). En général, vous pouvez voir la charge chronique comme un indicateur du niveau de forme physique: plus votre corps peut s'entraîner, plus vous êtes en forme. \\newline{}\\textbf{Charge d'entraînement aigue}: représente votre charge d'entraînement au cours de la dernière semaine (derniers 7 jours). La charge d'entraînement aigue est liée à la fatigue: l'augmentation de la fréquence des entraînements intenses au cours des derniers jours entraîne une fatigue plus élevée.", fig.width=11, fig.height=11.5}
+\raggedright
+
+```{r assiduite, results = 'asis'}
+# df de date pour combler les gap de data
+ts <-
+  seq.POSIXt(
+    as.POSIXct(selection_debut, "%m/%d/%y"),
+    as.POSIXct(selection_fin, "%m/%d/%y"),
+    by = "day"
+  )
+df <- data.frame(date = ts)
+
+df_pct <- metriques_clean %>%
+  select(date, moving_time, lutrimp, icu_joules)
+
+gg_pct <- df_pct %>%
+  left_join(df, df_pct, by = c("date")) %>%
+  # val avec 0 (code vars entrainement) en NA
+  mutate_if(is.numeric, funs(ifelse(. == 0, NA, .))) %>%
+  # pourcentage des data du mois sans na
+  summarize_all(funs(sum(!is.na(.)) / length(.))) %>%
+  mutate(
+    # percent_rep = round(wellness * 100),
+    percent_pwr = round(icu_joules / moving_time * 100),
+    # correction si plus de jour avec pwr que rep
+    percent_pwr = ifelse(percent_pwr > 100, 100, percent_pwr),
+    fc_percent_pwr = round(lutrimp / icu_joules * 100),
+    # correction si moins de jour avec pwr que fc
+    fc_percent_pwr = ifelse(fc_percent_pwr > 100, 100, fc_percent_pwr)
+  )
+```
+
+### Informations sur la période analysée
+
+\vspace{-12pt}
+
+(`r date_yaml`)
+
+* Vous avez utilisé votre  capteur de puissance pour **`r (gg_pct$percent_pwr)`**% de vos entraînements.  
+* Vous avez utilisé votre moniteur de fréquence cardiaque pour **`r (gg_pct$fc_percent_pwr)`**% de vos entraînements enregistrés avec capteur de puissance.
+
+\justifying
+
+**Questions?** 
+
+Écrivez moi via [courriel](mailto:jules.cusson-fradet@uqtr.ca)
+
+\center 
+
+\vspace{12pt}
+\vspace{12pt}
+
+### Résumé de la saison en chiffres selon 4 grandes périodes
+
+```{r tab saison}
+# total saison
+tot_saison <- metriques_clean %>%
+   select(date,
+          temps_h,
+          icu_kj,
+          kj_h,
+          lutrimp,
+          lutrimp_h,
+          zone1_h,
+          zone2_h,
+          zone3_h) %>%
+   mutate(
+      temps_h = sum(temps_h),
+      icu_kj = sum(icu_kj),
+      kj_h = mean(kj_h),
+      lutrimp = sum(lutrimp),
+      lutrimp_h = mean(lutrimp_h),
+      zone1_h = sum(zone1_h, na.rm = TRUE),
+      zone2_h = sum(zone2_h, na.rm = TRUE),
+      zone3_h = sum(zone3_h, na.rm = TRUE)
+   ) %>% 
+   mutate_if(is.numeric, round) %>%
+   rename(
+      "Heures (h)" = temps_h,
+      "Travail total (kJ)" = icu_kj,
+      "Travail/h" = kj_h,
+      "LuTRIMP" = lutrimp,
+      "LuTRIMP/h" = lutrimp_h,
+      "Zone 1 (h)" = zone1_h,
+      "Zone 2 (h)" = zone2_h,
+      "Zone 3 (h)" = zone3_h
+   ) %>%
+   select(-1) %>% 
+   distinct() %>% 
+   pivot_longer(cols = 1:8,
+                names_to = "Variables",
+                values_to = "Saison") 
+
+tab_resume <- metriques_clean %>%
+   select(date,
+          temps_h,
+          icu_kj,
+          kj_h,
+          lutrimp,
+          lutrimp_h,
+          zone1_h,
+          zone2_h,
+          zone3_h) %>%
+   # séparer la saison en 4
+   mutate(Q = month(date)) %>%
+   mutate(
+      Q = as.factor(Q),
+      Q = fct_recode(
+         Q,
+         "Pré-saison" = "10",
+         "Pré-saison" = "11",
+         "Début-saison" = "12",
+         "Début-saison" = "1",
+         "Début-saison" = "2",
+         "Mi-saison" = "3",
+         "Mi-saison" = "4", 
+         "Mi-saison" = "5",
+         "Fin-saison" = "6",
+         "Fin-saison" = "7", 
+         "Fin-saison" = "8")
+   ) %>%
+   group_by(Q) %>%
+   mutate(
+      temps_h = sum(temps_h),
+      icu_kj = sum(icu_kj),
+      kj_h = mean(kj_h),
+      lutrimp = sum(lutrimp),
+      lutrimp_h = mean(lutrimp_h),
+      zone1_h = sum(zone1_h, na.rm = TRUE),
+      zone2_h = sum(zone2_h, na.rm = TRUE),
+      zone3_h = sum(zone3_h, na.rm = TRUE)
+   ) %>% 
+   mutate_if(is.numeric, round) %>%
+   rename(
+      "Heures (h)" = temps_h,
+      "Travail total (kJ)" = icu_kj,
+      "Travail/h" = kj_h,
+      "LuTRIMP" = lutrimp,
+      "LuTRIMP/h" = lutrimp_h,
+      "Zone 1 (h)" = zone1_h,
+      "Zone 2 (h)" = zone2_h,
+      "Zone 3 (h)" = zone3_h
+   ) %>%
+   select(-1) %>% 
+   distinct() %>% 
+   pivot_longer(cols = 1:8,
+                names_to = "Variables",
+                values_to = "data") %>%
+   pivot_wider(names_from = Q, values_from = data) 
+
+df_res <- merge(tot_saison, tab_resume, all = TRUE) %>%
+   mutate(Variables =  factor(
+      Variables,
+      levels = c(
+         "Heures (h)",
+         "Travail total (kJ)",
+         "Travail/h",
+         "LuTRIMP",
+         "LuTRIMP/h",
+         "Zone 1 (h)",
+         "Zone 2 (h)",
+         "Zone 3 (h)"
+      )
+   )) %>%
+   arrange(Variables) 
+
+df_res %>% 
+   kable(
+      escape = FALSE,
+      align = c("l", "c", "c", "c", "c", "c"),
+      booktabs = T,
+      linesep = "",
+      caption = "Caractéristiques de l'entraînement en fonction des périodes de la saison"
+   ) %>%
+   kable_styling(latex_options = c("hold_position", "striped")) %>%
+   row_spec(0, bold = T) %>%
+   footnote(
+      general_title = "",
+      general = "Pré-saison: octobre-novembre; Début-saison: décembre-février; Mi-saison: mars-mai; Fin-saison: juin-août Le calcul du temps par zone est basé sur la puissance.",
+      threeparttable = T,
+      fixed_small_size = T
+   )
+```
+
+\newpage
+
+### Comparaison de différentes méthodes de quantification de la charge d'entraînement
+
+```{r TL, fig.width=11, fig.height=13.25, fig.cap="Méthodes de quantification de la charge d'entraînement externe (TSS, Travail) et interne (Fréquence cardiaque). Voir page suivante pour les détails."}
 gg_tss <-
    ggplot(metriques_clean, aes(date, weight = icu_training_load)) +
    geom_vline(
@@ -366,7 +628,7 @@ gg_tss <-
                     values = alpha("grey"),
                     labels = "Données journalières",
                     drop = FALSE) +
-   labs(y = "(TSS)\n", x = "") +
+   labs(y = "TSS\n", x = "") +
    ggtitle("Charge: training stress score (TSS)") +
    theme_minimal() +
    theme(
@@ -379,13 +641,14 @@ gg_tss <-
       axis.text.y = element_text(colour = "#A6A6A6"),
       panel.grid.major.x = element_blank(),
       panel.grid.minor.x = element_blank(), 
+      plot.title = element_text(margin = margin(b = -10)),
       legend.margin = margin(t = 0, unit = 'cm')
    ) +
    guides(color = guide_legend(order = 1),
           fill = guide_legend(order = 2))
 
 gg_kj <-
-   ggplot(metriques_clean, aes(date, weight = icu_joules_divised)) +
+   ggplot(metriques_clean, aes(date, weight = icu_joules_divised * 10)) +
    geom_vline(
       xintercept = datebreaks,
       color = "#999999",
@@ -393,24 +656,42 @@ gg_kj <-
       linetype = "dashed"
    ) +
    geom_bar(aes(fill = "")) +
-   geom_area(aes(y = aigue_7_kj), fill = "#FF8247", alpha = 0.85) +
-   geom_line(aes(y = aigue_7_kj, group = 1, color = "Aigue (7 jours)"), size =
-                1.25) +
-   geom_area(aes(y = chronique_42_kj), fill = "#1E90FF", alpha = 0.5) +
-   geom_line(aes(y = chronique_42_kj, group = 1, color = "Chronique (42 jours)"),
-             size = 1.25) +
+   geom_area(aes(y = aigue_7_kj * 10),
+             fill = "#FF8247",
+             alpha = 0.85) +
+   geom_line(aes(
+      y = aigue_7_kj * 10,
+      group = 1,
+      color = "Aigue (7 jours)"
+   ), size =
+      1.25) +
+   geom_area(aes(y = chronique_42_kj * 10),
+             fill = "#1E90FF",
+             alpha = 0.5) +
+   geom_line(aes(
+      y = chronique_42_kj * 10,
+      group = 1,
+      color = "Chronique (42 jours)"
+   ),
+   size = 1.25) +
    scale_color_manual(
       name = "",
-      values = c("Aigue (7 jours)" = "#FF8247",
-                 "Chronique (42 jours)" = "#1E90FF"),
+      values = c(
+         "Aigue (7 jours)" = "#FF8247",
+         "Chronique (42 jours)" = "#1E90FF"
+      ),
       drop = FALSE
    ) +
-   scale_fill_manual(name = "",
-                    values = alpha("grey"),
-                    labels = "Données journalières",
-                    drop = FALSE) +
-   labs(y = "Kilojoules simplifiés (kJ)\n", x = "") +
-   ggtitle("Charge: travail simplifié (kJ)") +
+   scale_fill_manual(
+      name = "",
+      values = alpha("grey"),
+      labels = "Données journalières",
+      drop = FALSE
+   ) +
+   scale_y_continuous(breaks = seq(0, max(metriques_clean$icu_joules_divised * 10), by = 1000), limits =
+                         c(0, max(metriques_clean$icu_joules_divised * 10))) +
+   labs(y = "Kilojoules \n", x = "") +
+   ggtitle("Charge: travail (kJ)") +
    theme_minimal() +
    theme(
       legend.position = "top",
@@ -421,7 +702,8 @@ gg_kj <-
       axis.title.y = element_text(colour = "#A6A6A6"),
       axis.text.y = element_text(colour = "#A6A6A6"),
       panel.grid.major.x = element_blank(),
-      panel.grid.minor.x = element_blank(), 
+      panel.grid.minor.x = element_blank(),
+      plot.title = element_text(margin = margin(b = -10)),
       legend.margin = margin(t = 0, unit = 'cm')
    ) +
    guides(color = guide_legend(order = 1),
@@ -456,7 +738,7 @@ gg_trimp <-
                     drop = FALSE) +
    labs(y = "LuTRIMP (UA)\n", x = "") +
    scale_x_date(breaks = datebreaks, date_labels = "%b") +
-   ggtitle("Charge: Lucia's training impulse (fréquence cardiaque)") +
+   ggtitle("Charge: LuTRIMP (Fc)") +
    theme_minimal() +
    theme(
       legend.position = "top",
@@ -468,6 +750,7 @@ gg_trimp <-
       axis.text.y = element_text(colour = "#A6A6A6"),
       panel.grid.major.x = element_blank(),
       panel.grid.minor.x = element_blank(),
+      plot.title = element_text(margin = margin(b = -10)),
       legend.margin = margin(t = 0, unit = 'cm')
    ) +
    guides(color = guide_legend(order = 1),
@@ -500,7 +783,7 @@ gg_acwr_kj <-
       ),
       drop = FALSE
    ) +
-   labs(y = "(aigue/chronique)\n", x = "") +
+   labs(y = "Aiguë / Chronique\n", x = "") +
    ggtitle("Risque de maladaptation") +
    theme_minimal() +
    #match order risque blessure
@@ -515,6 +798,7 @@ gg_acwr_kj <-
       axis.text.y = element_text(colour = "#A6A6A6"),
       panel.grid.major.x = element_blank(),
       panel.grid.minor.x = element_blank(), 
+      plot.title = element_text(margin = margin(b = -10)),
       legend.margin = margin(t = 0, unit = 'cm')
    )
 
@@ -546,11 +830,11 @@ gg_fra_kj <-
       ),
       drop = FALSE
    ) +
-   labs(y = "(chronique - aigue)\n", x = "") +
+   labs(y = "Chronique - Aiguë\n", x = "") +
    ggtitle("Fraîcheur") +
    theme_minimal() +
    theme(
-     legend.position = "top",
+         legend.position = "top",
       legend.title = element_blank(),
       axis.ticks.y = element_blank(),
       axis.title.x = element_blank(),
@@ -559,6 +843,7 @@ gg_fra_kj <-
       axis.text.y = element_text(colour = "#A6A6A6"),
       panel.grid.major.x = element_blank(),
       panel.grid.minor.x = element_blank(), 
+      plot.title = element_text(margin = margin(b = -10)),
       legend.margin = margin(t = 0, unit = 'cm')
    )
 
@@ -586,24 +871,151 @@ gg_mono_kj <-
       ),
       drop = FALSE
    ) +
-   labs(y = "Variabilité (7j)\n", x = "") +
+   labs(y = "Variabilité (SD 7j)\n", x = "") +
    scale_x_date(breaks = datebreaks, date_labels = "%b") +
    ggtitle("Monotonie") +
    theme_minimal() +
    #match order risque blessure
    guides(fill = guide_legend(reverse = TRUE)) +
    theme(
-      legend.position = "top",
+         legend.position = "top",
       legend.title = element_blank(),
       axis.ticks.y = element_blank(),
       axis.title.x = element_blank(),
-      axis.title.y = element_text(colour = "#A6A6A6"),
       axis.text.x = element_text(colour = "#A6A6A6"),
+      axis.title.y = element_text(colour = "#A6A6A6"),
       axis.text.y = element_text(colour = "#A6A6A6"),
       panel.grid.major.x = element_blank(),
-      panel.grid.minor.x = element_blank(),
+      panel.grid.minor.x = element_blank(), 
+      plot.title = element_text(margin = margin(b = -10)),
       legend.margin = margin(t = 0, unit = 'cm')
    )
+
+df_kj_lutrimp_ravg <- metriques_clean %>%
+    select(
+      date,
+      ACWR_lutrimp_g_nrpe,
+      ACWR_kj_g_nrpe,
+      ACWR_lutrimp_g_nrpe_ravg,
+      ACWR_kj_g_nrpe_ravg,
+      ACWR_lutrimp_g_nrpe_ravg_sd,
+      ACWR_kj_g_nrpe_ravg_sd,
+      lutrimp_divised,
+      icu_joules_divised
+    ) %>%
+    mutate_at(vars(lutrimp_divised,
+                   icu_joules_divised),
+              ~ replace(., is.na(.), 0)) %>%
+    # remplacer NA par dernière valeur pour éviter drop data
+    na.locf(na.rm = FALSE)
+  
+  gg_df_kj_lutrimp_ravg <- df_kj_lutrimp_ravg %>%
+    ggplot(aes(x = date)) +
+     geom_vline(
+      xintercept = datebreaks,
+      color = "#999999",
+      size = 0.25,
+      linetype = "dashed"
+   ) +
+    geom_line(aes(y = ACWR_kj_g_nrpe_ravg,
+                  color = "Travail - kJ (aiguë/chronique)"),
+              size = 1) +
+    geom_ribbon(aes(
+      ymin = (ACWR_kj_g_nrpe_ravg - ACWR_kj_g_nrpe_ravg_sd),
+      ymax = (ACWR_kj_g_nrpe_ravg + ACWR_kj_g_nrpe_ravg_sd)
+    ),
+    fill = alpha("#6633CC", .3)) +
+    geom_line(aes(y = ACWR_lutrimp_g_nrpe_ravg,
+                  color = "LuTRIMP - Fc (aiguë/chronique)"),
+              size = 1.25) +
+    geom_ribbon(aes(
+      ymin = (ACWR_lutrimp_g_nrpe_ravg - ACWR_lutrimp_g_nrpe_ravg_sd),
+      ymax = (ACWR_lutrimp_g_nrpe_ravg + ACWR_lutrimp_g_nrpe_ravg_sd)
+    ),
+    fill = alpha("#DD0347", .3)) +
+    labs(x = "", y = "Aiguë / Chronique\n") +
+    ggtitle("Charge externe vs interne") +
+    scale_color_manual(
+      name = "",
+      values = c(
+          "Travail - kJ (aiguë/chronique)" = "#6633CC",
+          "LuTRIMP - Fc (aiguë/chronique)" = "#DD0347"
+        ),
+      drop = FALSE,
+      na.translate = F
+    ) +
+    scale_x_date(breaks = datebreaks, date_labels = "%a %d") +
+    theme_minimal() +
+    theme(
+         legend.position = "top",
+      legend.title = element_blank(),
+      axis.ticks.y = element_blank(),
+      axis.title.x = element_blank(),
+      axis.text.x = element_blank(),
+      axis.title.y = element_text(colour = "#A6A6A6"),
+      axis.text.y = element_text(colour = "#A6A6A6"),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank(), 
+      plot.title = element_text(margin = margin(b = -10)),
+      legend.margin = margin(t = 0, unit = 'cm')
+    ) +
+  guides(color = guide_legend(order = 1),
+         fill = guide_legend(order = 2))
+  
+  gg_aero <- metriques_clean %>%
+      mutate_at(vars(efficacite_aerobique_ravg60,
+                   efficacite_aerobique_norm,
+                   efficacite_aerobique_ravg7),
+              ~ na_if(., 0)) %>%
+    # remplacer NA par dernière valeur pour éviter drop data
+    na.locf(na.rm = FALSE) %>%
+    ggplot(aes(date)) +
+     geom_vline(
+      xintercept = datebreaks,
+      color = "#999999",
+      size = 0.25,
+      linetype = "dashed"
+   ) +
+    geom_ribbon(aes(
+      ymin = (efficacite_aerobique_ravg60 - efficacite_aerobique_norm),
+      ymax = (efficacite_aerobique_ravg60 + efficacite_aerobique_norm),
+      fill = "Variabilité normale (42 jours)"
+    )) +
+    scale_fill_manual(
+      name = "",
+      values = alpha("#FF6A6A", .3),
+      labels = "Variabilité normale (42 jours)",
+      drop = FALSE
+    ) +
+    geom_line(aes(y = efficacite_aerobique_ravg7, color = "Tendance (7 jours)"),
+              lwd = 1.5) +
+    scale_color_manual(
+      name = "",
+      values = alpha("#DD0347", .6),
+      labels = "Tendance (7 jours)",
+      drop = FALSE
+    ) +
+    scale_x_date(breaks = "1 day", date_labels = "%a %d") +
+    labs(x = "", y = "W / Fc\n") +
+    ggtitle("Efficacité") +
+    theme_minimal() +
+    theme(
+        legend.position = "top",
+      legend.title = element_blank(),
+      axis.ticks.y = element_blank(),
+      axis.title.x = element_blank(),
+      axis.text.x = element_blank(),
+      axis.title.y = element_text(colour = "#A6A6A6"),
+      axis.text.y = element_text(colour = "#A6A6A6"),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank(), 
+      plot.title = element_text(margin = margin(b = -10)),
+      legend.margin = margin(t = 0, unit = 'cm')
+  ) +
+    guides(color = guide_legend(order = 1),
+           fill = guide_legend(order = 2))
+  
+    
 
 graphs <- grid.arrange(
    arrangeGrob(gg_tss, ncol = 1, nrow = 1),
@@ -613,38 +1025,66 @@ graphs <- grid.arrange(
 )
 ```
 
-\pagenumbering{arabic}
+\newpage
+
+\justifying
+
+**Charge d’entraînement chronique**:
+
+Représente la charge moyenne réalisée dans les derniers 42 jours. En général, vous pouvez voir la charge chronique comme un indicateur du niveau de condition physique: plus votre corps a été exposé à une charge moyenne élevée, plus votre potentiel de performance est grand [@Banister1975-es].
+
+**Charge d’entraînement aiguë**:
+
+Représente votre charge d'entraînement moyenne réalisée dans les 7 derniers jours. La charge d’entraînement aiguë est liée à la fatigue: une augmentation de la fréquence, de la durée et de l'intensité des entraînements au cours des derniers jours entraîne une fatigue plus élevée [@Banister1975-es].
 
 \newpage
 
-**Aperçu global de la charge d'entraînement et des mesures descriptives**
+\center 
 
-```{r global,  fig.cap="Évolution de la charge d’entraînement et des mesures descriptives au cours de la saison. \\newline{}\\textbf{Risque de maladaptation}: le rapport entre votre charge d'entraînement aigue et votre charge chronique peut être utilisé pour déterminer le risque de maladaptation ou de blessure. Une charge d'entraînement aigue élevée et une charge d'entraînement chronique faible sont des signes avant-coureurs de maladaptation à l'entraînement puisque nous stressons le corps plus qu'il n'en a l'habitude. \\newline{}\\textbf{Fraîcheur}: la différence entre votre charge chronique (≈forme) et votre charge aigue (≈fatigue) peut être utilisée pour déterminer le niveau de préparation à la performance. Une valeur optimale est généralement un peu au-dessus de zéro. \\newline{}\\textbf{Monotonie}: fait référence à la similitude de l'entraînement sur une période de 7 jours. Une faible monotonie est normalement associée à des méthodes de périodisation alternant des entraînements à haute et basse intensité. Une valeur élevée indique que l'entraînement peut être inefficace et conduire à une stagnation ou à un manque d'amélioration.", fig.width=11, fig.height=10.15}
+### Aperçu global de la charge d'entraînement et des mesures descriptives
+
+```{r global, fig.width=11, fig.height=13.5, fig.cap="Évolution de la charge d’entraînement et des mesures descriptives au cours de la saison. Voir page suivante pour les détails."}
 graphs <- grid.arrange(
    arrangeGrob(gg_kj, ncol = 1, nrow = 1),
    arrangeGrob(gg_acwr_kj, ncol = 1, nrow = 1),
    arrangeGrob(gg_fra_kj, ncol = 1, nrow = 1),
    arrangeGrob(gg_mono_kj, ncol = 1, nrow = 1),
-   heights = c(3, 2.125, 2.75, 2.125)
+   heights = c(3.25, 2, 2.75, 2)
 )
 ```
+\newpage
+
+\justifying
+
+**Risque de maladaptation**: 
+
+Le ratio entre votre charge d’entraînement aiguë et votre charge chronique peut être utilisé pour déterminer le risque de maladaptation ou de blessure. Une charge d’entraînement aiguë élevée et une charge d’entraînement chronique faible sont des signes avant-coureurs de maladaptation à l’entraînement puisque nous stressons le corps plus qu’il n’en a l’habitude [@Gabbett2016-tv].
+
+**Fraîcheur**: 
+
+La différence entre votre charge chronique (≈condition physique) et votre charge aiguë (≈fatigue) peut être utilisée pour déterminer le niveau de préparation à la performance. Une valeur optimale est généralement un peu au-dessus de zéro [@Banister1975-es].
+
+**Monotonie**: 
+
+Fait référence à la similitude de l’entraînement dans les 7 derniers jours. Une faible monotonie est normalement associée à des méthodes de périodisation alternant des entraînements à haute et basse intensité. Une valeur élevée indique que l’entraînement peut être inefficace et conduire à une stagnation ou à un manque d’amélioration [@Foster1998-ue].
 
 \newpage
 
-**Modélisations des paramètres de puissance critique (CP) et de W'**
+\center 
+
+### Modélisation des paramètres de puissance critique (CP) et de W'
 
 ```{r tabCP}
-data_cp <- records_clean %>% 
-   select(secs, saison) %>% 
+data_cp <- records_clean %>%
+   select(secs, saison) %>%
    rename(
       TTE = secs,
       PO = saison
-   ) %>% 
-   na.omit() %>% 
+   ) %>%
+   na.omit() %>%
    # records saison entre 3min et 20min
    filter(TTE %in% c(180:1200))
-
-# data_cp_tab <- data_cp %>% 
+# data_cp_tab <- data_cp %>%
 #     mutate(
 #       TTE = as.factor(TTE),
 #       TTE = fct_recode(
@@ -656,44 +1096,44 @@ data_cp <- records_clean %>%
 #          "20m @" = "1200"
 #       ),
 #       PO = paste0(PO, "W")
-#     ) %>% 
+#     ) %>%
 #    add_column(
 #       "numero" = c("(1)",
 #                    "(2)",
 #                    "(3)",
 #                    "(4)",
 #                    "(5)"),
-#       .before = "TTE"         
-#    ) %>% 
+#       .before = "TTE"
+#    ) %>%
 #    mutate(
 #       "Sélection records" = paste(numero, TTE, PO)
-#    ) 
-# 
+#    )
+
 # combinations_results <- critical_power(
-#   .data = data_cp, 
-#   power_output_column = "PO", 
-#   time_to_exhaustion_column = "TTE", 
-#   method = c("3-hyp", "2-hyp", "linear", "1/time"), 
-#   plot = TRUE, 
+#   .data = data_cp,
+#   power_output_column = "PO",
+#   time_to_exhaustion_column = "TTE",
+#   method = c("3-hyp", "2-hyp", "linear", "1/time"),
+#   plot = TRUE,
 #   all_combinations = TRUE,
 #   reverse_y_axis = FALSE
-# ) 
+# )
 
 simple_results <- critical_power(
-  .data = data_cp, 
-  power_output_column = "PO", 
-  time_to_exhaustion_column = "TTE", 
-  method = c("1/time"), 
-  plot = TRUE, 
+  .data = data_cp,
+  power_output_column = "PO",
+  time_to_exhaustion_column = "TTE",
+  method = c("1/time"),
+  plot = TRUE,
   all_combinations = FALSE,
   reverse_y_axis = FALSE
 )
 
-# cp <- combinations_results %>% 
-#   slice_min(RMSE, n = 1) %>% 
+# cp <- combinations_results %>%
+#   slice_min(RMSE, n = 1) %>%
 #   dplyr::pull(CP)
 # 
-# W <- combinations_results %>% 
+# W <- combinations_results %>%
 #   slice_min(RMSE, n = 1) %>%
 #   dplyr::pull(`W'`)
 
@@ -807,24 +1247,29 @@ gg
 
 \newpage
 
+### Zones d'entraînement
+
+\vspace{12pt}
+\vspace{12pt}
+
 Zones d'entraînement établies à partir d'une puissance critique de **`r round(cp)`** Watts
 
 ```{r zonesW}
-zones_p <- metriques_clean %>%
+zones_p <- metriques_clean |> 
   mutate(
-    z1_min = round(cp_max / 100 * 0),
-    z1_max = round(cp_max / 100 * 55),
-    z2_min = round(cp_max / 100 * 55),
-    z2_max = round(cp_max / 100 * 75),
-    z3_min = round(cp_max / 100 * 75),
-    z3_max = round(cp_max / 100 * 90),
-    z4_min = round(cp_max / 100 * 90),
-    z4_max = round(cp_max / 100 * 105),
-    z5_min = round(cp_max / 100 * 105),
-    z5_max = round(cp_max / 100 * 120),
-    z6_min = round(cp_max / 100 * 120),
-    z6_max = round(cp_max / 100 * 150),
-    z7_min = round(cp_max / 100 * 150),
+    z1_min = round(cp / 100 * 0),
+    z1_max = round(cp / 100 * 55),
+    z2_min = z1_max + 1,
+    z2_max = round(cp / 100 * 75),
+    z3_min = z2_max + 1,
+    z3_max = round(cp / 100 * 90),
+    z4_min = z3_max + 1,
+    z4_max = round(cp / 100 * 105),
+    z5_min = z4_max + 1,
+    z5_max = round(cp / 100 * 120),
+    z6_min = z5_max + 1,
+    z6_max = round(cp / 100 * 150),
+    z7_min = z6_max + 1,
     z7_max = "+"
   ) %>%
   select(
@@ -883,12 +1328,12 @@ lab_p <- tibble(
   ),
   "CP (\\%)" = c(
     "0 - 55\\%",
-    "55 - 75\\%",
-    "75 - 90\\%",
-    "90 - 105\\%",
-    "105 - 120\\%",
-    "120 - 150\\%",
-    "150 \\% +"
+    "56 - 75\\%",
+    "76 - 90\\%",
+    "91 - 105\\%",
+    "106 - 120\\%",
+    "121 - 150\\%",
+    "151\\% +"
   )
 )
 
@@ -900,23 +1345,23 @@ df_z_p <- merge(zones_p, lab_p, all = TRUE) %>%
          Puissance) %>%
   add_column(
     "RPE (Borg, 0-100)" = c("≤ 12",
-                            "12 - 23",
-                            "35 - 50",
-                            "50 - 60",
-                            "70 - +",
+                            "13 - 35",
+                            "36 - 50",
+                            "51 - 59",
+                            "≥ 60",
                             "≥ 80",
                             "max"),
     .after = "Puissance"
   ) %>%
   add_column(
     "Temps typique accumulé" = c(
-      "1 - 6 h",
-      "1 - 3 h",
-      "50 - 90 min",
-      "30 - 60 min",
-      "15 - 30 min",
-      "5 - 15 min",
-      "< 5 min"
+      "1 - 6h",
+      "1 - 3h",
+      "50 - 90min",
+      "30 - 60min",
+      "15 - 30min",
+      "5 - 15min",
+      "< 5min"
     ),
     .after = "RPE (Borg, 0-100)"
   ) %>%
@@ -930,7 +1375,7 @@ df_z_p <- merge(zones_p, lab_p, all = TRUE) %>%
              .after = "Temps typique accumulé")
 
 # ajouter unité w
-df_z_p$Puissance <- paste0(df_z_p$Puissance, " Watts")
+df_z_p$Puissance <- paste0(df_z_p$Puissance, "w")
 
 # table zones P
 df_z_p %>%
@@ -998,13 +1443,13 @@ zones_fc <- metriques_clean %>%
   mutate(
     z1_min = round(fc_max / 100 * 0),
     z1_max = round(fc_max / 100 * 70),
-    z2_min = round(fc_max / 100 * 70),
+    z2_min = z1_max + 1,
     z2_max = round(fc_max / 100 * 80),
-    z3_min = round(fc_max / 100 * 80),
+    z3_min = z2_max + 1,
     z3_max = round(fc_max / 100 * 90),
-    z4_min = round(fc_max / 100 * 90),
+    z4_min = z3_max + 1,
     z4_max = round(fc_max / 100 * 95),
-    z5_min = round(fc_max / 100 * 95),
+    z5_min = z4_max + 1,
     z5_max = round(fc_max / 100 * 100)
   ) %>%
   select(z1_min,
@@ -1046,10 +1491,10 @@ lab_fc <- tibble(
                   "Seuil",
                   "VO2max"),
   "Fc max (\\%)" = c("0 - 70\\%",
-                     "70 - 80\\%",
-                     "80 - 90\\%",
-                     "90 - 95\\%",
-                     "95 - 100\\%")
+                     "71 - 80\\%",
+                     "81 - 90\\%",
+                     "91 - 95\\%",
+                     "96 - 100\\%")
 )
 
 # Joindre en une table
@@ -1060,18 +1505,18 @@ df_z_fc <- merge(zones_fc, lab_fc, all = TRUE) %>%
          "Fréquence cardiaque") %>%
   add_column(
     "RPE (Borg, 0-100)" = c("≤ 12",
-                            "12 - 23",
-                            "35 - 60",
-                            "60 - 70",
-                            "70 - max"),
+                            "13 - 35",
+                            "36 - 59",
+                            "≤ 60",
+                            "≥ 60"),
     .after = "Fréquence cardiaque"
   ) %>%
   add_column(
-    "Temps typique accumulé" = c("1 - 6 h",
-                                 "1 - 3 h",
-                                 "50 - 90 min",
-                                 "30 - 60 min",
-                                 "15 - 30 min"),
+    "Temps typique accumulé" = c("1 - 6h",
+                                 "1 - 3h",
+                                 "50 - 90min",
+                                 "30 - 60min",
+                                 "15 - 30min"),
     .after = "RPE (Borg, 0-100)"
   ) %>%
   add_column("Zones (3)" = c("Z1",
@@ -1083,7 +1528,7 @@ df_z_fc <- merge(zones_fc, lab_fc, all = TRUE) %>%
 
 # ajouter unité
 df_z_fc$"Fréquence cardiaque" <-
-  paste0(df_z_fc$"Fréquence cardiaque", " bpm")
+  paste0(df_z_fc$"Fréquence cardiaque", "bpm")
 
 # table zones fc
 df_z_fc %>%
@@ -1139,9 +1584,9 @@ df_z_fc %>%
 
 \newpage
 
-**Distribution mensuelle du volume d'entraînement**
+### Distribution mensuelle de la charge d'entraînement
 
-```{r heuresTID, fig.cap="Heures totales et distribution de l'intensité d'entraînement selon le modèle de 3 zones de puissance (voir tableau des zones d'entraînement pour référence). En sport d'endurance, une distribution de l'intensité de type « pyramidale » (grande proportion en zone 1, suivie d'une proportion décroissante dans les zones 2 et 3) ou « polarisé » (≈ 80\\% zone 1 et ≈ 20\\% zone 3) semble maximiser les performances d'endurance. Note: Il peut y avoir une différence entre les heures totales et le temps par zone si certains entraînements ont été effectués sans capteur de puissance.", fig.width=11, fig.height=12}
+```{r heuresTID,  fig.width=11, fig.height=13.25,fig.cap="Heures totales et distribution de l'intensité d'entraînement selon le modèle de 3 zones de puissance (consulter le tableau des zones d'entraînement pour référence). Voir page suivante pour les détails."}
 df_heures <- metriques_clean %>% 
    select(date, temps_h) %>%
    group_by(mois = cut(date, "month")) %>%
@@ -1315,342 +1760,228 @@ graphs <- grid.arrange(
 
 \newpage
 
-**Résumé de la saison en chiffres selon 4 grandes périodes**
+\justifying
+
+**Distribution de l’intensité**: 
+
+Distribution hebdomadaire (Watts) et mensuelle (sRPE) selon le modèle à 3 zones [@Seiler2006-qa]. Les zones de puissance sont établies à partir d’une puissance critique de **`r cp`** Watts conformément aux pourcentages suivant: z1=0-75%, z2=76-105%, z3=106%-+. Votre puissance critique est estimée à partir de vos données de puissance records entre 3 et 20 minutes disponibles pour 2022.
+
+**Note**: 
+
+En sport d’endurance, une distribution de l’intensité de type «pyramidal» (grande proportion en zone 1, suivie d’une proportion décroissante dans les zones 2 et 3) ou «polarisé» (≈ 80% zone 1 et ≈ 20% zone 3) semble maximiser les performances [@Foster2022-tg]. 
 
 ```{r tabRES}
+# **Résumé de la saison en chiffres selon 4 grandes périodes**
+
 # joindre les valeurs CP et W calculées pour la saison avec record 3m-20m avec df metriques_clean
-merge_cp_w <- merge(cp, W, all = TRUE) %>%
-   rename(CP = x,
-          W = y)
-
-merge_cp_w_metriques <- merge(merge_cp_w, metriques_clean, all = TRUE)
-
-# total saisomn
-tot_saison <- merge_cp_w_metriques %>%
-   select(date,
-          temps_h,
-          icu_kj,
-          kj_h,
-          lutrimp,
-          lutrimp_h,
-          zone1_h,
-          zone2_h,
-          zone3_h,
-          CP,
-          W) %>%
-   mutate(
-      temps_h = sum(temps_h),
-      icu_kj = sum(icu_kj),
-      kj_h = mean(kj_h),
-      lutrimp = sum(lutrimp),
-      lutrimp_h = mean(lutrimp_h),
-      zone1_h = sum(zone1_h, na.rm = TRUE),
-      zone2_h = sum(zone2_h, na.rm = TRUE),
-      zone3_h = sum(zone3_h, na.rm = TRUE)
-   ) %>% 
-   mutate_if(is.numeric, round) %>%
-   rename(
-      "Heures (h)" = temps_h,
-      "Travail total (kJ)" = icu_kj,
-      "Travail/h" = kj_h,
-      "LuTRIMP" = lutrimp,
-      "LuTRIMP/h" = lutrimp_h,
-      "Zone 1 (h)" = zone1_h,
-      "Zone 2 (h)" = zone2_h,
-      "Zone 3 (h)" = zone3_h,
-      "CP (Watts)" = CP,
-      "W' (Joules)" = W
-   ) %>%
-   select(-1) %>% 
-   distinct() %>% 
-   pivot_longer(cols = 1:10,
-                names_to = "Variables",
-                values_to = "Saison") 
-
-tab_resume <- metriques_clean %>%
-   select(date,
-          temps_h,
-          icu_kj,
-          kj_h,
-          lutrimp,
-          lutrimp_h,
-          zone1_h,
-          zone2_h,
-          zone3_h,
-          icu_pm_cp,
-          icu_pm_w_prime) %>%
-   # séparer la saion en 4
-   mutate(Q = quarter(date)) %>%
-   mutate(
-      Q = as.factor(Q),
-      Q = fct_recode(
-         Q,
-         "Pré-saison" = "1",
-         "Début-saison" = "2",
-         "Mi-saison" = "3",
-         "Fin-saison" = "4"
-      )
-   ) %>%
-   group_by(Q) %>%
-   mutate(
-      temps_h = sum(temps_h),
-      icu_kj = sum(icu_kj),
-      kj_h = mean(kj_h),
-      lutrimp = sum(lutrimp),
-      lutrimp_h = mean(lutrimp_h),
-      zone1_h = sum(zone1_h, na.rm = TRUE),
-      zone2_h = sum(zone2_h, na.rm = TRUE),
-      zone3_h = sum(zone3_h, na.rm = TRUE),
-      icu_pm_cp = max(icu_pm_cp, na.rm = TRUE),
-      icu_pm_w_prime = max(icu_pm_w_prime, na.rm = TRUE)
-   ) %>% 
-   mutate_if(is.numeric, round) %>%
-   rename(
-      "Heures (h)" = temps_h,
-      "Travail total (kJ)" = icu_kj,
-      "Travail/h" = kj_h,
-      "LuTRIMP" = lutrimp,
-      "LuTRIMP/h" = lutrimp_h,
-      "Zone 1 (h)" = zone1_h,
-      "Zone 2 (h)" = zone2_h,
-      "Zone 3 (h)" = zone3_h,
-      "CP (Watts)" = icu_pm_cp,
-      "W' (Joules)" = icu_pm_w_prime
-   ) %>%
-   select(-1) %>% 
-   distinct() %>% 
-   pivot_longer(cols = 1:10,
-                names_to = "Variables",
-                values_to = "data") %>%
-   pivot_wider(names_from = Q, values_from = data) 
-
-df_res <- merge(tot_saison, tab_resume, all = TRUE) %>%
-   mutate(Variables =  factor(
-      Variables,
-      levels = c(
-         "Heures (h)",
-         "Travail total (kJ)",
-         "Travail/h",
-         "LuTRIMP",
-         "LuTRIMP/h",
-         "Zone 1 (h)",
-         "Zone 2 (h)",
-         "Zone 3 (h)",
-         "CP (Watts)",
-         "W' (Joules)"
-      )
-   )) %>%
-   arrange(Variables)  
-
-df_res %>% 
-   kable(
-      escape = FALSE,
-      align = c("l", "c", "c", "c", "c", "c"),
-      booktabs = T,
-      linesep = "",
-      caption = "Caractéristiques de l'entraînement en fonction des périodes de la saison"
-   ) %>%
-   kable_styling(latex_options = c("hold_position")) %>%
-   row_spec(0, bold = T) %>%
-   footnote(
-      general_title = "",
-      general = "Pré-saison: janvier-mars; Début-saison: avril-juin; Mi-saison: juillet-septembre; Fin-saison: octobre-décembre. Le calcul du temps par zone est basé sur la puissance.",
-      threeparttable = T,
-      fixed_small_size = T
-   )
+# merge_cp_w <- merge(cp, W, all = TRUE) %>%
+#    rename(CP = x,
+#           W = y)
+# 
+# merge_cp_w_metriques <- merge(merge_cp_w, metriques_clean, all = TRUE)
+# 
+# # total saison
+# tot_saison <- merge_cp_w_metriques %>%
+#    select(date,
+#           temps_h,
+#           icu_kj,
+#           kj_h,
+#           lutrimp,
+#           lutrimp_h,
+#           zone1_h,
+#           zone2_h,
+#           zone3_h,
+#           CP,
+#           W) %>%
+#    mutate(
+#       temps_h = sum(temps_h),
+#       icu_kj = sum(icu_kj),
+#       kj_h = mean(kj_h),
+#       lutrimp = sum(lutrimp),
+#       lutrimp_h = mean(lutrimp_h),
+#       zone1_h = sum(zone1_h, na.rm = TRUE),
+#       zone2_h = sum(zone2_h, na.rm = TRUE),
+#       zone3_h = sum(zone3_h, na.rm = TRUE)
+#    ) %>% 
+#    mutate_if(is.numeric, round) %>%
+#    rename(
+#       "Heures (h)" = temps_h,
+#       "Travail total (kJ)" = icu_kj,
+#       "Travail/h" = kj_h,
+#       "LuTRIMP" = lutrimp,
+#       "LuTRIMP/h" = lutrimp_h,
+#       "Zone 1 (h)" = zone1_h,
+#       "Zone 2 (h)" = zone2_h,
+#       "Zone 3 (h)" = zone3_h,
+#       "CP (Watts)" = CP,
+#       "W' (Joules)" = W
+#    ) %>%
+#    select(-1) %>% 
+#    distinct() %>% 
+#    pivot_longer(cols = 1:10,
+#                 names_to = "Variables",
+#                 values_to = "Saison") 
+# 
+# tab_resume <- metriques_clean %>%
+#    select(date,
+#           temps_h,
+#           icu_kj,
+#           kj_h,
+#           lutrimp,
+#           lutrimp_h,
+#           zone1_h,
+#           zone2_h,
+#           zone3_h,
+#           icu_pm_cp,
+#           icu_pm_w_prime) %>%
+#    # séparer la saison en 4
+#    mutate(Q = month(date)) %>%
+#    mutate(
+#       Q = as.factor(Q),
+#       Q = fct_recode(
+#          Q,
+#          "Pré-saison" = "10",
+#          "Pré-saison" = "11",
+#          "Début-saison" = "12",
+#          "Début-saison" = "1",
+#          "Début-saison" = "2",
+#          "Mi-saison" = "3",
+#          "Mi-saison" = "4", 
+#          "Mi-saison" = "5",
+#          "Fin-saison" = "6",
+#          "Fin-saison" = "7", 
+#          "Fin-saison" = "8")
+#    ) %>%
+#    group_by(Q) %>%
+#    mutate(
+#       temps_h = sum(temps_h),
+#       icu_kj = sum(icu_kj),
+#       kj_h = mean(kj_h),
+#       lutrimp = sum(lutrimp),
+#       lutrimp_h = mean(lutrimp_h),
+#       zone1_h = sum(zone1_h, na.rm = TRUE),
+#       zone2_h = sum(zone2_h, na.rm = TRUE),
+#       zone3_h = sum(zone3_h, na.rm = TRUE),
+#       icu_pm_cp = max(icu_pm_cp, na.rm = TRUE),
+#       icu_pm_w_prime = max(icu_pm_w_prime, na.rm = TRUE)
+#    ) %>% 
+#    mutate_if(is.numeric, round) %>%
+#    rename(
+#       "Heures (h)" = temps_h,
+#       "Travail total (kJ)" = icu_kj,
+#       "Travail/h" = kj_h,
+#       "LuTRIMP" = lutrimp,
+#       "LuTRIMP/h" = lutrimp_h,
+#       "Zone 1 (h)" = zone1_h,
+#       "Zone 2 (h)" = zone2_h,
+#       "Zone 3 (h)" = zone3_h,
+#       "CP (Watts)" = icu_pm_cp,
+#       "W' (Joules)" = icu_pm_w_prime
+#    ) %>%
+#    select(-1) %>% 
+#    distinct() %>% 
+#    pivot_longer(cols = 1:10,
+#                 names_to = "Variables",
+#                 values_to = "data") %>%
+#    pivot_wider(names_from = Q, values_from = data) 
+# 
+# df_res <- merge(tot_saison, tab_resume, all = TRUE) %>%
+#    mutate(Variables =  factor(
+#       Variables,
+#       levels = c(
+#          "Heures (h)",
+#          "Travail total (kJ)",
+#          "Travail/h",
+#          "LuTRIMP",
+#          "LuTRIMP/h",
+#          "Zone 1 (h)",
+#          "Zone 2 (h)",
+#          "Zone 3 (h)",
+#          "CP (Watts)",
+#          "W' (Joules)"
+#       )
+#    )) %>%
+#    arrange(Variables) |> 
+#    slice(1:(n() -2))
+# 
+# df_res %>% 
+#    kable(
+#       escape = FALSE,
+#       align = c("l", "c", "c", "c", "c", "c"),
+#       booktabs = T,
+#       linesep = "",
+#       caption = "Caractéristiques de l'entraînement en fonction des périodes de la saison"
+#    ) %>%
+#    kable_styling(latex_options = c("hold_position")) %>%
+#    row_spec(0, bold = T) %>%
+#    footnote(
+#       general_title = "",
+#       general = "Pré-saison: octobre-novembre; Début-saison: décembre-février; Mi-saison: mars-mai; Fin-saison: juin-août Le calcul du temps par zone est basé sur la puissance.",
+#       threeparttable = T,
+#       fixed_small_size = T
+#    )
 ```
 
 ```{r tabRESu23, fig.cap="Données comparatives de coureurs professionnels U23. Ref: Leo et al., (2020). Le calcul du temps par zone est basé sur la fréquence cardiaque et le calcul du TRIMP est différent de celui présenté en table 2. Les unités ne sont donc pas directement comparables. Évaluer uniquement les variations générales d'une période à l'autre pour ces deux variables.", out.width = '90%'}
-knitr::include_graphics("data_norm_u23.png")
+# knitr::include_graphics("data_norm_u23.png")
 ```
 
 \newpage
 
-**Évolution de la charge externe et interne**
+\center 
 
-```{r ExtInt,  fig.cap="Comparaison des ratios aigue/chronique de charge externe (kJ) et interne (Fc, LuTRIMP). La zone ombragée (grise) représente l'étendue de variation optimale (faible risque de maladaption / blessure). Les ratios de charge externe et interne sont normalement « couplés » et évoluent ensemble. Lorsqu'il y a un « découplage » entre la charge externe et interne, nous pouvons déceler une variation de l'état d'entraînement. Typiquement, lorsque la charge externe monte plus rapidement que la charge interne, l'athlète est performant et peu fatigué. À l'inverse, lorsque la charge interne monte plus rapidement que la charge externe, l'athlète est possiblement en état de surmenage. Pour une analyse valide, les charges externe et interne doivent avoir été mesurées simultanément sur une période prolongée (vérifier avec les 2 graphiques du bas).", fig.width=11, fig.height=11}
-gg_kj_lutrimp <- metriques_clean %>%
-   ggplot(aes(x = date)) +
-   geom_vline(
-      xintercept = datebreaks,
-      color = "#999999",
-      size = 0.25,
-      linetype = "dashed"
-   ) +
-   annotate(
-      "rect",
-      ymin = 0.8,
-      ymax = 1.3,
-      xmin = min(metriques_clean$date),
-      xmax = max(metriques_clean$date),
-      fill = "#DCDCDC",
-      alpha = 50 / 100
-   ) +
-   geom_line(
-      aes(y = ACWR_kj_ravg,
-          color = "Travail - kJ (aigue/chronique)"),
-      size = 1.25
-   ) +
-   geom_line(
-      aes(y = ACWR_lutrimp_ravg,
-          color = "LuTRIMP - Fc (aigue/chronique)"),
-      size = 1.25
-   ) +
-   scale_y_continuous(breaks = seq(
-      from = 0.2,
-      to = max(2),
-      by = 0.4
-   )) +
-   coord_cartesian(ylim = c(min(0.2), max(2)),
-                   expand = TRUE,
-                   default = TRUE) +
-   labs(x = "", y = "(aigue/chronique)\n") +
-   ggtitle("Charge externe vs interne") +
-   scale_color_manual(
-      name = "",
-      values = alpha(c("#DD0347",
-                 "#6633CC"), .6),
-      drop = FALSE
-   ) +
-   theme_minimal() +
-   theme(
-      legend.position = "top",
-      legend.title = element_blank(),
-      axis.ticks.y = element_blank(),
-      axis.title.x = element_blank(),
-      axis.text.x = element_blank(),
-      axis.title.y = element_text(colour = "#A6A6A6"),
-      axis.text.y = element_text(colour = "#A6A6A6"),
-      panel.grid.major.x = element_blank(),
-      panel.grid.minor.x = element_blank(), 
-      legend.margin = margin(t = 0, unit = 'cm')
-   )
+### Évolution de l'état d'entraînement et de la performance
 
-gg_kj_j <-
-   ggplot(metriques_clean, aes(date, weight = icu_joules_divised)) +
-   geom_vline(
-      xintercept = datebreaks,
-      color = "#999999",
-      size = 0.25,
-      linetype = "dashed"
-   ) +
-   geom_bar(fill = "#6633CC", alpha = .6) +
-   labs(y = "Kilojoules (kJ)\n", x = "") +
-   scale_x_date(breaks = datebreaks, date_labels = "%b") +
-   ggtitle("Travail journalier") +
-   theme_minimal() +
-   theme(
-      legend.position = "top",
-      legend.title = element_blank(),
-      axis.ticks.y = element_blank(),
-      axis.title.x = element_blank(),
-      axis.text.x = element_blank(),
-      axis.title.y = element_text(colour = "#A6A6A6"),
-      axis.text.y = element_text(colour = "#A6A6A6"),
-      panel.grid.major.x = element_blank(),
-      panel.grid.minor.x = element_blank()
+```{r perf,  fig.width=11, fig.height=13.5, fig.cap="Analyse des variations de l'état d'entraînement et de la performance. Voir page suivante pour les détails."}
+e_perf <- metriques_clean %>%
+   select(
+      date,
+      icu_intensity,
+      icu_pm_cp,
+      icu_pm_w_prime) 
+
+# df de date pour combler les gap de data
+ts <- seq.POSIXt(as.POSIXct(selection_debut, "%m/%d/%y"), as.POSIXct(selection_fin, "%m/%d/%y"), by="day")
+df <- data.frame(date=ts)
+
+# joindre avec df original
+df_full <- full_join(df, e_perf) %>%
+   mutate(date = as.Date(date)) %>%
+   # remplacer NA par dernière valeur pour éviter drop data
+   na.locf(na.rm = FALSE) |>
+   # 0 si NaN
+mutate_if(is.numeric, function(x)
+   ifelse(is.infinite(x), 0, x)) |>
+# 0 si NA
+mutate_if(is.numeric, function(x)
+  ifelse(is.na(x), 0, x)) |> 
+# remplacer next value by preceding if lower
+# mutate(icu_pm_cp_ravg7 = cummax(icu_pm_cp_ravg7[1:7, 1]))
+   # rollavg max value
+   mutate(icu_pm_cp = runMax(icu_pm_cp, 3)) |> 
+   mutate(
+      icu_pm_cp_ravg7 = rollapply(
+         icu_pm_cp,
+         7,
+         mean,
+         na.rm = TRUE,
+         fill = NA,
+         align = 'right',
+         partial = TRUE
+      ),
+      icu_pm_cp_ravg60 = rollapply(
+         icu_pm_cp,
+         42,
+         mean,
+         na.rm = TRUE,
+         fill = NA,
+         align = 'right',
+         partial = TRUE
+      ),
+      icu_pm_cp_norm = 0.75 * (roll_sd(icu_pm_cp, 42, min_obs = 1))
    ) 
 
-gg_trimp_j <-
-   ggplot(metriques_clean, aes(date, weight = lutrimp_divised)) +
-   geom_vline(
-      xintercept = datebreaks,
-      color = "#999999",
-      size = 0.25,
-      linetype = "dashed"
-   ) +
-   geom_bar(fill = "#DD0347", alpha = .6) +
-   labs(y = "LuTRIMP (UA)\n", x = "") +
-   scale_x_date(breaks = datebreaks, date_labels = "%b") +
-   ggtitle("LuTRIMP journalier") +
-   theme_minimal() +
-   theme(
-      legend.position = "top",
-      legend.title = element_blank(),
-      axis.ticks.y = element_blank(),
-      axis.title.x = element_blank(),
-      axis.title.y = element_text(colour = "#A6A6A6"),
-      axis.text.x = element_text(colour = "#A6A6A6"),
-      axis.text.y = element_text(colour = "#A6A6A6"),
-      panel.grid.major.x = element_blank(),
-      panel.grid.minor.x = element_blank()
-   ) 
-
-graphs <- grid.arrange(
-   arrangeGrob(gg_kj_lutrimp, ncol = 1, nrow = 1),
-   arrangeGrob(gg_kj_j, ncol = 1, nrow = 1),
-   arrangeGrob(gg_trimp_j, ncol = 1, nrow = 1),
-   heights = c(5, 2.5, 2.5)
-)
-```
-
-\newpage
-
-**Évolution de l'état d'entraînement et de la performance**
-
-```{r perf, fig.cap="Analyse des variations de l'état d'entraînement. La relation entre les variations de charge d'entraînement, la distribution de l'intensité et les marqueurs d'état d'entraînement et de performance permet de mieux comprendre les conditions favorables et défavorables à la performance. \\newline{}\\textbf{Endurance aérobie}: relation entre la puissance et la fréquence cardiaque. Intuitivement, une fréquence cardiaque plus basse pour la même puissance se traduit par une meilleure endurance aérobie. De même, une puissance plus élevée à la même fréquence cardiaque est liée à une meilleure endurance aérobie. \\newline{}\\textbf{Estimation CP et W'}: calculée à partir d'un effort maximal compris entre 180 secondes et 30 minutes et mis en relation avec votre profil de record de puissance.", fig.width=11, fig.height=11.5}
-gg_tid_pct <- metriques_clean %>%
-   select(date, zone1, zone2, zone3) %>%
-   group_by(mois = cut(date, "month")) %>%
-   summarise_at(vars(zone1, zone2, zone3),  sum, na.rm = TRUE) %>%
-   mutate(
-      zone1_pct = (zone1 / (zone1 + zone2 + zone3) * 100),
-      zone2_pct = (zone2 / (zone1 + zone2 + zone3) * 100),
-      zone3_pct = (zone3 / (zone1 + zone2 + zone3) * 100)
-   ) %>%
-   pivot_longer(
-      cols = c(zone1_pct, zone2_pct, zone3_pct),
-      names_to = "zones",
-      values_to = "pourcentage"
-   ) %>%
-   mutate(
-      mois = as.Date(mois, format = "%Y-%m-%d"),
-      zones = recode_factor(
-         zones,
-         zone1_pct = "zone 1 (%)",
-         zone2_pct = "zone 2 (%)",
-         zone3_pct = "zone 3 (%)"
-      )
-   ) %>%
-   ggplot(aes(y = pourcentage, x = mois)) +
-   geom_bar(
-      aes(fill = fct_rev(zones)),
-      alpha = 0.6,
-      position = "stack",
-      stat = "identity"
-   ) +
-   scale_fill_manual(
-      values = c("#FF6A6A", "#EEB422", "#00FA9A"),
-      guide = guide_legend(reverse = TRUE)
-   ) +
-   geom_text(aes(x = mois, label = paste0(round(pourcentage), '%')),
-             colour = 'black',
-             position = position_stack(vjust = 0.5)) +
-   labs(y = "Pourcentage (%)\n", x = "") +
-   scale_x_date(breaks = datebreaks, date_labels = "%b") +
-   scale_y_continuous(breaks = seq(from = 0, to = 100, by = 20)) +
-   coord_cartesian(ylim = c(min(0), max(100)),
-                   expand = TRUE,
-                   default = TRUE) +
-   ggtitle("Distribution intensité (zones puissance)") +
-   theme_minimal() +
-   theme(
-      legend.position = "top",
-      legend.title = element_blank(),
-      axis.ticks = element_line(colour = "#A6A6A6"),
-      axis.ticks.y = element_blank(),
-      axis.title.x = element_blank(),
-      axis.title.y = element_text(colour = "#A6A6A6"),
-      axis.text.x = element_text(colour = "#A6A6A6"),
-      axis.text.y = element_text(colour = "#A6A6A6"),
-      panel.grid.major.x = element_blank(),
-      panel.grid.minor.x = element_blank(),
-      legend.margin = margin(t = 0, unit = 'cm')
-   )
-
-gg_aero <- metriques_clean %>% 
-   # remplacer NA par dernière valeur
-   na.locf(na.rm = FALSE) %>% 
+gg_ecp <- df_full %>%
    ggplot(aes(date)) +
    geom_vline(
       xintercept = datebreaks,
@@ -1659,370 +1990,228 @@ gg_aero <- metriques_clean %>%
       linetype = "dashed"
    ) +
    geom_ribbon(aes(
-      ymin = (efficacite_aerobique_ravg60 - efficacite_aerobique_norm),
-      ymax = (efficacite_aerobique_ravg60 + efficacite_aerobique_norm),
-      fill = "Variabilité normale (60 jours)"
+      ymin = (icu_pm_cp_ravg60 - icu_pm_cp_norm),
+      ymax = (icu_pm_cp_ravg60 + icu_pm_cp_norm),
+      fill = "Variabilité normale (42 jours)"
    )) +
    scale_fill_manual(
       name = "",
-      values = alpha("#FF6A6A", .3),
-      labels = "Variabilité normale (60 jours)",
+      values = alpha("#6633CC", .3),
+      labels = "Variabilité normale (42 jours)",
       drop = FALSE
    ) +
-   geom_line(aes(y = efficacite_aerobique_ravg7, color = "Tendance (7 jours)"),
+   geom_line(aes(y = icu_pm_cp_ravg7, color = "Tendance (7 jours)"),
              lwd = 1.5) +
    scale_color_manual(
       name = "",
-      values = alpha("#DD0347", .6),
+      values = alpha("#6633CC", .6),
       labels = "Tendance (7 jours)",
       drop = FALSE
    ) +
-    scale_y_continuous(breaks = seq(
-      from = min(0.4),
-      to = max(1.8),
-      by = 0.4
-   )) +
-   coord_cartesian(ylim = c(min(0.4), max(1.8)),
-                   expand = TRUE,
-                   default = TRUE) +
-   labs(x = "", y = "(Watts moy / Fc moy)\n") +
-   ggtitle("Endurance aérobie") +
+   scale_x_date(breaks = datebreaks, date_labels = "%b") +
+   labs(x = "", y = "Puissance  (Watts)\n") +
+   ggtitle("Estimation CP") +
    theme_minimal() +
    theme(
       legend.position = "top",
       legend.title = element_blank(),
       axis.ticks.y = element_blank(),
       axis.title.x = element_blank(),
+      axis.text.x = element_text(colour = "#A6A6A6"),
       axis.title.y = element_text(colour = "#A6A6A6"),
-      axis.text.x = element_blank(),
       axis.text.y = element_text(colour = "#A6A6A6"),
       panel.grid.major.x = element_blank(),
       panel.grid.minor.x = element_blank(),
+      plot.title = element_text(margin = margin(b = -10)),
       legend.margin = margin(t = 0, unit = 'cm')
    ) +
    guides(color = guide_legend(order = 1),
           fill = guide_legend(order = 2))
 
-e_perf <- metriques_clean %>%
-   select(
-      date,
-      icu_intensity,
-      icu_pm_cp,
-      icu_pm_w_prime)
-   # ) %>%
-   # # filtrer seulement sortie avec intensité élevé
-   # filter(icu_intensity > 75)
-
-# df de date pour combler les gap de data
-ts <- seq.POSIXt(as.POSIXct(selection_debut, "%m/%d/%y"), as.POSIXct(selection_fin, "%m/%d/%y"), by="day")
-df <- data.frame(date=ts)
-
-# joindre avec df original
-df_full <- full_join(df,e_perf) %>% 
-   mutate(date = as.Date(date)) %>% 
-   # remplacer NA par dernière valeur pour éviter drop data
-   na.locf(na.rm = FALSE)
-
-gg_ecp <- ggplot(df_full, aes(date, icu_pm_cp)) +
-   geom_vline(
-      xintercept = datebreaks,
-      color = "#999999",
-      size = 0.25,
-      linetype = "dashed"
-   ) +
-   geom_line(aes(y = icu_pm_cp, color = "eCP"),
-             lwd = 1.5) +
-   scale_color_manual(
-      name = "",
-      values = alpha("#6633CC", .6),
-      labels = "eCP",
-      drop = FALSE
-   ) +
-   labs(x = "", y = "Puissance  (Watts)\n") +
-   theme_minimal() +
-   ggtitle("Estimation CP") +
-   theme(
-      legend.position = "top",
-      legend.title = element_blank(),
-      axis.ticks.y = element_blank(),
-      axis.title.x = element_blank(),
-      axis.title.y = element_text(colour = "#A6A6A6"),
-      axis.text.x = element_blank(),
-      axis.text.y = element_text(colour = "#A6A6A6"),
-      panel.grid.major.x = element_blank(),
-      panel.grid.minor.x = element_blank(),
-      legend.margin = margin(t = 0, unit = 'cm')
-   )
-
-gg_ew <- ggplot(df_full, aes(date, icu_pm_w_prime)) +
-   geom_vline(
-      xintercept = datebreaks,
-      color = "#999999",
-      size = 0.25,
-      linetype = "dashed"
-   ) +
-   geom_line(aes(y = icu_pm_w_prime, color = "eW'"),
-             lwd = 1.5) +
-   scale_color_manual(
-      name = "",
-      values = alpha("#40E0D0", .6),
-      labels = "eW'",
-      drop = FALSE
-   ) +
-   scale_x_date(breaks = datebreaks, date_labels = "%b") +
-   labs(x = "", y = "Joules\n") +
-   theme_minimal() +
-   ggtitle("Estimation W'") +
-   theme(
-      legend.position = "top",
-      legend.title = element_blank(),
-      axis.ticks.y = element_blank(),
-      axis.title.x = element_blank(),
-      axis.title.y = element_text(colour = "#A6A6A6"),
-      axis.text.x = element_text(colour = "#A6A6A6"),
-      axis.text.y = element_text(colour = "#A6A6A6"),
-      panel.grid.major.x = element_blank(),
-      panel.grid.minor.x = element_blank(),
-      legend.margin = margin(t = 0, unit = 'cm')
-   )
-
 graphs <- grid.arrange(
    arrangeGrob(gg_kj, ncol = 1, nrow = 1),
    arrangeGrob(gg_tid_pct, ncol = 1, nrow = 1),
-   arrangeGrob(gg_kj_lutrimp, ncol = 1, nrow = 1),
+   arrangeGrob(gg_df_kj_lutrimp_ravg, ncol = 1, nrow = 1),
    arrangeGrob(gg_aero, ncol = 1, nrow = 1),
    arrangeGrob(gg_ecp, ncol = 1, nrow = 1),
-   arrangeGrob(gg_ew, ncol = 1, nrow = 1),
-   heights = c(1.75, 2.25, 1.5, 1.5, 1.5, 1.5)
+   heights = c(2.25, 2.25, 2.25, 1.5, 1.5)
 )
 ```
 
 \newpage
 
-**Profil de puissance record et résistance à la fatigue**
+\justifying
 
-```{r MMPkJ, fig.cap="Profil de puissance record absolu et suite à un travail de 2000kJ et 3000kJ au cours de la saison. Le degré de diminution de puissance en réponse à un travail donné permet d'apprécier le niveau de résistance à la fatigue. Une résistance à la fatigue élevée, soit une faible différence entre les records de puissance absolus et les records après 2000kJ et 3000kJ, est l'un des meilleurs prédicteurs de performance en cyclisme sur route."}
-mmp <- records_clean %>%
-   # garder records 20min et moins
-   filter(secs <= 1200) %>%
-   pivot_longer(
-      cols = c(saison_wkg:saison_3000_kj_wkg),
-      names_to = "records",
-      values_to = "watts_kg"
-   ) %>%
-   mutate(
-      records = fct_recode(
-         records,
-         "Records saison" = "saison_wkg",
-         "Records après 2000 kJ" = "saison_2000_kj_wkg",
-         "Records après 3000 kJ" = "saison_3000_kj_wkg"
-      ),
-      records = factor(
-         records,
-         levels = c("Records saison", 
-                    "Records après 2000 kJ", 
-                    "Records après 3000 kJ"
-                    )
-      )
-   ) 
+**Charges externe vs interne**: 
 
-gg_mmp <- mmp %>%
-   ggplot(aes(x = secs, y = watts_kg, colour = records)) +
-   geom_line(lwd = 1.5, alpha = 0.6) +
-   scale_x_log10(
-      breaks = c(1, 5, 15, 30, 60, 120, 300, 720, 1200),
-      labels = c("1s", "5s", "15s", "30s", "1m", "2m", "5m", "12m", "20m")
-   ) +
-   scale_y_continuous(breaks = seq(
-      from = min(round(mmp$watts_kg -1),  na.rm = TRUE),
-      to = max(round(mmp$watts_kg +1), na.rm = TRUE),
-      by = 1
-   )) +
-   coord_cartesian(ylim = c(min(round(mmp$watts_kg -1),  na.rm = TRUE), max(round(mmp$watts_kg +1),  na.rm = TRUE)),
-                   expand = TRUE,
-                   default = TRUE) +
-   labs(y = "Puissance (W/kg)\n",
-        x = "\nTemps",
-        color = "") +
-   ggtitle("") +
-   theme_minimal() +
-   theme(
-      axis.text.x = element_text(colour = "#A6A6A6"),
-      axis.text.y = element_text(colour = "#A6A6A6"),
-      axis.title.x = element_text(colour = "#A6A6A6"),
-      axis.title.y = element_text(colour = "#A6A6A6"),
-      panel.grid.minor.y = element_blank(),
-      panel.grid.minor.x = element_blank(),
-      legend.position = "top"
-   )
+Comparaison des ratios aiguë/chronique de charges externe **kJ** et interne **LuTRIMP** [@Lucia2003-cr]. Lorsque le ratio est égal à 1, la charge aiguë est égale à la charge chronique: la charge d’entraînement est stable. La charge est en augmentation lorsque le ratio est supérieur à 1 et en diminution si inférieur à 1. Les ratios de charge externe et interne sont normalement «couplés» et évoluent ensemble. Lorsqu’il y a un «découplage» entre la charge externe et interne, nous pouvons déceler une variation de l’état d’entraînement [@Impellizzeri2019-bw]. Typiquement, lorsque la charge externe monte plus rapidement que la charge interne, l’athlète est performant et peu fatigué. À l’inverse, lorsque la charge interne monte plus rapidement que la charge externe, l’athlète est possiblement en état de surmenage. Seuls les entraînements avec des données de puissance et de fréquence cardiaque sont utilisés pour l'analyse. Les bandes de couleur translucides autour des lignes de tendance indiquent la variation normale (écart-type). Un «découplage» est considéré comme important si les bandes translucides ne se chevauchent pas. 
 
-gg_mmp
-```
+**Efficacité**: 
 
-\vspace{12pt}
-\vspace{12pt}
+Relation entre la puissance et la fréquence cardiaque. Intuitivement, une fréquence cardiaque plus basse pour la même puissance se traduit par une meilleure efficacité, c'est-à-dire, un coût interne plus faible pour la même charge externe. De même, une puissance plus élevée à la même fréquence cardiaque est liée à une meilleure efficacité. La bande de couleur translucide (Variabilité normale (42 jours)) autour de la ligne de tendance (Tendance (7 jours)) indique la variation normale (écart-type). Un changement est considéré comme important lorsque la ligne de tendance est à l'extérieur de la bande translucide [@Batterham2006-yp]. 
+
+**Estimation CP**: 
+
+Calculée à partir d’un effort maximal compris entre 180 secondes et 30 minutes et mis en relation avec votre profil de record de puissance. La bande de couleur translucide (Variabilité normale (42 jours)) autour de la ligne de tendance (Tendance (7 jours)) indique la variation normale (écart-type). Un changement est considéré comme important lorsque la ligne de tendance est à l'extérieur de la bande translucide [@Batterham2006-yp]. 
 
 ```{r MMPkJu23, fig.cap="Données comparatives de coureurs professionnels et  U23. Ref: Leo et al., (2021).", out.width = '90%'}
-knitr::include_graphics("mmp_u23.png")
+# knitr::include_graphics("mmp_u23.png")
 ```
-
-\newpage
 
 ```{r tableauMMP}
-tab_mmp <- records_clean %>%
-   select(secs, saison:saison_3000_kj, saison_wkg:saison_3000_kj_wkg) %>%
-   filter(secs %in% c(1, 5, 15, 30, 60, 120, 300, 720, 1200)) %>%
-   rename(Temps = secs) %>%
-   mutate(
-      Temps = as.factor(Temps),
-      Temps = fct_recode(
-         Temps,
-         "1s" = "1",
-         "5s" = "5",
-         "15s" = "15",
-         "30s" = "30",
-         "1m" = "60",
-         "2m" = "120",
-         "5m" = "300",
-         "12m" = "720",
-         "20m" = "1200"
-      )
-   ) %>%
-   rename(
-         "Records saison (W)" = "saison",
-         "Records après 2000 kJ (W)" = "saison_2000_kj",
-         "Records après 3000 kJ (W)" = "saison_3000_kj",
-         "Records saison (W/kg)" = "saison_wkg",
-         "Records après 2000 kJ (W/kg)" = "saison_2000_kj_wkg",
-         "Records après 3000 kJ (W/kg)" = "saison_3000_kj_wkg"
-   ) %>% 
-   select(1, 5, 2, 6, 3, 7, 4) %>%                     
-   kable(
-      escape = FALSE,
-      align = c("l", "c", "c", "c", "c", "c", "c"),
-      booktabs = T,
-      linesep = "",
-      caption = "Records de puissance absolus et suite à un travail de 2000kJ et 3000kJ au cours de la saison"
-   ) %>%
-   kable_styling(latex_options = c("hold_position"), full_width = TRUE) %>%
-   row_spec(0, bold = T)  
-   
-tab_mmp
+# tab_mmp <- records_clean %>%
+#    select(secs, saison:saison_3000_kj, saison_wkg:saison_3000_kj_wkg) %>%
+#    filter(secs %in% c(1, 5, 15, 30, 60, 120, 300, 720, 1200)) %>%
+#    rename(Temps = secs) %>%
+#    mutate(
+#       Temps = as.factor(Temps),
+#       Temps = fct_recode(
+#          Temps,
+#          "1s" = "1",
+#          "5s" = "5",
+#          "15s" = "15",
+#          "30s" = "30",
+#          "1m" = "60",
+#          "2m" = "120",
+#          "5m" = "300",
+#          "12m" = "720",
+#          "20m" = "1200"
+#       )
+#    ) %>%
+#    rename(
+#          "Records saison (W)" = "saison",
+#          "Records après 2000 kJ (W)" = "saison_2000_kj",
+#          "Records après 3000 kJ (W)" = "saison_3000_kj",
+#          "Records saison (W/kg)" = "saison_wkg",
+#          "Records après 2000 kJ (W/kg)" = "saison_2000_kj_wkg",
+#          "Records après 3000 kJ (W/kg)" = "saison_3000_kj_wkg"
+#    ) %>% 
+#    select(1, 5, 2, 6, 3, 7, 4) %>%                     
+#    kable(
+#       escape = FALSE,
+#       align = c("l", "c", "c", "c", "c", "c", "c"),
+#       booktabs = T,
+#       linesep = "",
+#       caption = "Records de puissance absolus et suite à un travail de 2000kJ et 3000kJ au cours de la saison"
+#    ) %>%
+#    kable_styling(latex_options = c("hold_position"), full_width = TRUE) %>%
+#    row_spec(0, bold = T)  
+#    
+# tab_mmp
 ```
 
-\vspace{12pt}
-\vspace{12pt}
-
 ```{r coggan, fig.cap="Adaptation de la charte de record de puissance de Coggan en fonction du niveau de performance (à titre informatif seulement). Permet une appréciation générale des forces et des faiblesses."}
-coggan_ath_mmp <- records_clean %>%
-   filter(secs %in% c(5, 60, 300, 1200)) %>%
-   mutate(
-      secs = as.factor(secs),
-      secs = fct_recode(
-         secs,
-         "5s" = "5",
-         "1m" = "60",
-         "5m" = "300",
-         "20m" = "1200"
-      )
-   ) %>%
-   select(secs, saison_wkg) %>% 
-   rename(
-      "temps" = "secs",
-      "wkg" = "saison_wkg"
-   ) %>% 
-   add_column("df" = athlete) 
-
-coggan_pp <- read_csv("coggan_power-profile.csv") %>%
-   mutate_all(function(x)
-      as.numeric(as.character(x))) %>%
-   pivot_longer(
-      cols = c("5s":"20m"),
-      names_to = "temps",
-      values_to = "wkg"
-   ) %>% 
-   add_column("df" = "coggan") %>% 
-   mutate(
-      temps = as.factor(temps)
-   ) 
-
-df_coggan <- merge(coggan_ath_mmp, coggan_pp, all = TRUE) %>% 
-group_by(temps) %>% 
-   mutate(ordre = order(wkg),
-          # calcul % = 100 / nb ligne 
-          pourcentage = round(100/30 * ordre)) %>% 
-   filter(df != "coggan") %>% 
-   select(temps, pourcentage, wkg)
-
-df_coggan %>%
-   ggplot(aes(y = pourcentage, x = temps)) +
-   geom_linerange(aes(x = temps, ymin = 0, ymax = pourcentage),
-                  color = "#A083D4",
-                  size = 2.5) +
-   geom_point(
-      size = 10.5,
-      color = "#A083D4",
-      fill = "#BFB0D9",
-      shape = 21,
-      stroke = 3
-   ) +
-   geom_text(
-      aes(x = temps, y = -2, label = paste0(wkg, " (W/kg)")),
-      color = "#A083D4",
-      size = 3.5,
-      fontface = "bold"
-   ) +
-   scale_y_continuous(
-      breaks = seq(from = 27, to = 100, by = 9.125),
-      labels = c(
-         "Cat 5",
-         "Cat 4",
-         "Cat 3",
-         "Cat 2",
-         "Cat 1",
-         "Pro conti",
-         "Pro WT",
-         "Record mondial",
-         ""
-      )
-   ) +
-   coord_cartesian(ylim = c(min(0), max(110)),
-                   expand = TRUE,
-                   default = TRUE) +
-   labs(y = "", x = "") +
-   ggtitle("") +
-   theme_minimal() +
-   theme(
-      legend.position = "top",
-      legend.title = element_blank(),
-      axis.ticks.y = element_blank(),
-      axis.title.x = element_blank(),
-      axis.title.y = element_text(colour = "#A6A6A6"),
-      axis.text.x = element_text(colour = "#A6A6A6", face="bold"),
-      axis.text.y = element_text(colour = "#A6A6A6", face="bold"),
-      panel.grid.major.x = element_blank(),
-      panel.grid.minor.x = element_blank(),
-      panel.grid.minor.y = element_blank(),
-      axis.line.x = element_line(colour = "#A6A6A6", size = 0.5),
-   )
+# coggan_ath_mmp <- records_clean %>%
+#    filter(secs %in% c(5, 60, 300, 1200)) %>%
+#    mutate(
+#       secs = as.factor(secs),
+#       secs = fct_recode(
+#          secs,
+#          "5s" = "5",
+#          "1m" = "60",
+#          "5m" = "300",
+#          "20m" = "1200"
+#       )
+#    ) %>%
+#    select(secs, saison_wkg) %>% 
+#    rename(
+#       "temps" = "secs",
+#       "wkg" = "saison_wkg"
+#    ) %>% 
+#    add_column("df" = athlete) 
+# 
+# coggan_pp <- read_csv("coggan_power-profile.csv") %>%
+#    mutate_all(function(x)
+#       as.numeric(as.character(x))) %>%
+#    pivot_longer(
+#       cols = c("5s":"20m"),
+#       names_to = "temps",
+#       values_to = "wkg"
+#    ) %>% 
+#    add_column("df" = "coggan") %>% 
+#    mutate(
+#       temps = as.factor(temps)
+#    ) 
+# 
+# df_coggan <- merge(coggan_ath_mmp, coggan_pp, all = TRUE) %>% 
+# group_by(temps) %>% 
+#    mutate(ordre = order(wkg),
+#           # calcul % = 100 / nb ligne 
+#           pourcentage = round(100/30 * ordre)) %>% 
+#    filter(df != "coggan") %>% 
+#    select(temps, pourcentage, wkg)
+# 
+# df_coggan %>%
+#    ggplot(aes(y = pourcentage, x = temps)) +
+#    geom_linerange(aes(x = temps, ymin = 0, ymax = pourcentage),
+#                   color = "#A083D4",
+#                   size = 2.5) +
+#    geom_point(
+#       size = 10.5,
+#       color = "#A083D4",
+#       fill = "#BFB0D9",
+#       shape = 21,
+#       stroke = 3
+#    ) +
+#    geom_text(
+#       aes(x = temps, y = -2, label = paste0(wkg, " (W/kg)")),
+#       color = "#A083D4",
+#       size = 3.5,
+#       fontface = "bold"
+#    ) +
+#    scale_y_continuous(
+#       breaks = seq(from = 27, to = 100, by = 9.125),
+#       labels = c(
+#          "Cat 5",
+#          "Cat 4",
+#          "Cat 3",
+#          "Cat 2",
+#          "Cat 1",
+#          "Pro conti",
+#          "Pro WT",
+#          "Record mondial",
+#          ""
+#       )
+#    ) +
+#    coord_cartesian(ylim = c(min(0), max(110)),
+#                    expand = TRUE,
+#                    default = TRUE) +
+#    labs(y = "", x = "") +
+#    ggtitle("") +
+#    theme_minimal() +
+#    theme(
+#       legend.position = "top",
+#       legend.title = element_blank(),
+#       axis.ticks.y = element_blank(),
+#       axis.title.x = element_blank(),
+#       axis.title.y = element_text(colour = "#A6A6A6"),
+#       axis.text.x = element_text(colour = "#A6A6A6", face="bold"),
+#       axis.text.y = element_text(colour = "#A6A6A6", face="bold"),
+#       panel.grid.major.x = element_blank(),
+#       panel.grid.minor.x = element_blank(),
+#       panel.grid.minor.y = element_blank(),
+#       axis.line.x = element_line(colour = "#A6A6A6", size = 0.5),
+#    )
 ```
 
 \newpage
 
-**Exploration des corrélations entre les différentes variables**
+\center
+
+### Corrélations
 
 ```{r corr, fig.cap="Matrice de corrélation. Le coefficient de corrélation R (1 à -1) indique la force de la corrélation et le sens de celle-ci. Lorsque le R est positif (vert), les valeurs des deux variables tendent à augmenter ensemble. Lorsque le R est négatif (rouge), les valeurs d’une variable tendent à augmenter alors que les valeurs de l'autre variable diminuent. Les valeurs R de 1 et -1 représentent chacune des corrélations « parfaites », positive et négative. L'intensité de la couleur et la circonférence des cercles indiquent la valeur de la corrélation R. La probabilité statistique (valeur p) et son niveau de signification sont représentés par le symbole \\textbf{*} (0.001 = \\textbf{***}, 0.01 = \\textbf{**}, 0.05 = \\textbf{*}).", fig.width=11, fig.height=12.5}
 cor_df_7 <- metriques_clean %>%
    select(
       date,
       icu_pm_cp,
-      icu_pm_w_prime,
       aigue_7_kj,
       chronique_42_kj,
+      ACWR_kj_ravg,
       fraicheur_kj,
       monotonie_kj,
-      ACWR_kj_ravg,
-      ACWR_lutrimp_ravg,
+      ACWR_kj_g_nrpe_ravg,
+      ACWR_lutrimp_g_nrpe_ravg,
       efficacite_aerobique,
       temps_h,
       kj_h,   
@@ -2034,15 +2223,6 @@ cor_df_7 <- metriques_clean %>%
   mutate(
      icu_pm_cp_ravg7 = rollapply(
         icu_pm_cp,
-        7,
-        mean,
-        na.rm = TRUE,
-        fill = NA,
-        align = 'right',
-        partial = TRUE
-     ),
-     icu_pm_w_prime_ravg7 = rollapply(
-        icu_pm_w_prime,
         7,
         mean,
         na.rm = TRUE,
@@ -2130,31 +2310,30 @@ cor_df_7 <- metriques_clean %>%
         fill = NA,
         align = 'right',
         partial = TRUE
-     )
+     ),
+     ext_int = ACWR_kj_g_nrpe_ravg - ACWR_lutrimp_g_nrpe_ravg
   ) %>% 
    select(aigue_7_kj,
           chronique_42_kj,
           ACWR_kj_ravg,
-          ACWR_lutrimp_ravg,
-          17:27) %>%
+          17:27) %>% 
    rename(
-      eCP = icu_pm_cp_ravg7,
-      "eW'" = icu_pm_w_prime_ravg7,
-      "Endurance aérobie" = efficacite_aerobique_ravg7,
+      "Charge Ext-Int" = ext_int,
+      "Efficacité aérobie" = efficacite_aerobique_ravg7,
+      "eCP" = icu_pm_cp_ravg7,
       "Zone1 (h)" = zone1_ravg7,
       "Zone2 (h)" = zone2_ravg7,
       "Zone3 (h)" = zone3_ravg7,
       "kJ/h" = kj_h_ravg7,
       "TRIMP/h" = lutrimp_h_ravg7,
       "Temps (h)" = temps_h_ravg7,
+      "Risque de maladaptation" = ACWR_kj_ravg,
       "Fraîcheur" = fraicheur_kj_ravg7,
       "Monotonie" = monotonie_kj_ravg7,
-      "Aigue/chronique (kJ)" =  ACWR_kj_ravg,
-      "Aigue/chroniue (Fc)" = ACWR_lutrimp_ravg,
       "Charge aigue (kJ)" = aigue_7_kj,
       "Charge chronique (kJ)" = chronique_42_kj
    ) %>% 
-   select(5, 6, 9, 13:15, 11, 12, 10, 7, 8, 3, 4, 1, 2)
+   select(14, 7, 4, 11:13, 8:10, 3, 5, 6, 1, 2)
 
 
 M<-cor(cor_df_7, use="complete.obs")
@@ -2165,3 +2344,184 @@ col <- colorRampPalette(c("#FF6A6A", "white", "#00FA9A"))(20)
 
 corrplot(M, p.mat = testRes$p, insig = 'label_sig', sig.level = c(0.001, 0.01, 0.05), pch.cex = 0.9, pch.col = 'grey20', method="circle", tl.col = "black", tl.cex=0.65, tl.srt = 45, col = col)
 ```
+
+\newpage
+
+\center 
+
+### Profil de puissance record et résistance à la fatigue
+
+```{r PPR-comp, fig.width=11, fig.height=10, fig.cap="Appréciation du potentiel de performance selon le profil de puissance record de la saison."}
+PPR_pro <- tibble(
+  "5s" = 25,
+  "15s" = 18.9,
+  "30s" = 15.1,
+  "1m" = 11.6,
+  "5m" = 7.7,
+  "20m" = 6.9,
+  "1h" = 6.4
+) %>% 
+   pivot_longer(
+      cols = c("5s":"1h"),
+      names_to = "temps",
+      values_to = "wkg_top"
+   ) %>% 
+  mutate(
+      temps = as.factor(temps)
+   ) %>% 
+   add_column("ath" = "top_pro") 
+
+PPR_comp <- records_clean %>%
+    select(
+      secs,
+      saison_wkg,
+      saison_3000_kj_wkg
+    ) %>%
+    filter(secs %in% c(
+      5,
+      15,
+      30,
+      60,
+      300,
+      1200,
+      3600
+    )) %>%
+    rename(temps = secs) %>%
+    mutate(
+      temps = as.factor(temps),
+      temps = fct_recode(
+        temps,
+        "5s" = "5",
+        "15s" = "15",
+        "30s" = "30",
+        "1m" = "60",
+        "5m" = "300",
+        "20m" = "1200",
+        "1h" = "3600"
+      )
+    ) %>% 
+  pivot_longer(
+      cols = c(2:ncol(.)),
+      names_to = "periode",
+      values_to = "wkg"
+   ) %>%
+  add_column("ath" = nom_yaml)
+
+df_PPR_comp <- merge(PPR_pro, PPR_comp,  all = TRUE) %>%
+  fill(wkg_top, .direction = "up") %>%
+  filter(ath != "top_pro") %>%
+  group_by(temps, periode) %>%
+  mutate(pourcentage_top_pro = round(wkg / wkg_top * 100)) %>%
+  ungroup() %>%
+  mutate(temps = factor(temps,
+                        levels = c("5s",
+                                   "15s",
+                                   "30s",
+                                   "1m",
+                                   "5m",
+                                   "20m",
+                                   "1h"))) 
+df_PPR_comp <- df_PPR_comp %>% 
+  mutate(wkg_0kj = if_else(df_PPR_comp$periode == "saison_wkg", wkg, 0),
+         wkg_3kj = if_else(df_PPR_comp$periode == "saison_3000_kj_wkg", wkg, 0)
+  ) %>% 
+  replace(.==0, NA) %>% 
+  fill(wkg_0kj, .direction = "down") %>%
+  fill(wkg_3kj, .direction = "up") %>%
+  mutate(diff_3kj = 100 - round(wkg_3kj /wkg_0kj * 100))
+
+gg <- df_PPR_comp %>%
+  filter(periode %in% c("saison_wkg", "saison_3000_kj_wkg")) %>% 
+  mutate(periode = factor(periode, levels=c("saison_wkg", "saison_3000_kj_wkg"))) %>%
+  ggplot(aes(x = temps, y = pourcentage_top_pro, fill = periode, color = periode)) +
+  annotate("rect", ymin = 0, ymax = 60, xmin = -Inf, xmax = Inf, fill = "#FF6A6A", alpha = 30/100) +
+  annotate("rect", ymin = 60, ymax = 70, xmin = -Inf, xmax = Inf, fill = "#EEB422", alpha = 30/100) + 
+  annotate("rect", ymin = 70, ymax = 80, xmin = -Inf, xmax = Inf, fill = "#00FA9A", alpha = 30/100) +
+  annotate("rect", ymin = 80, ymax = 90, xmin = -Inf, xmax = Inf, fill = "#069966", alpha = 40/100) + 
+  annotate("rect", ymin = 90, ymax = 100, xmin = -Inf, xmax = Inf, fill = "#056141", alpha = 50/100) +
+  geom_bar(stat = "identity", position = position_dodge2(padding = 0.1), size = 1.5) + 
+  geom_text(
+      aes(x = temps, y = pourcentage_top_pro, label = ifelse(periode == "saison_wkg", paste0(pourcentage_top_pro, "%"), paste0(diff_3kj, "%"))),
+      position = position_dodge(width = 0.9),
+      color = "black",
+      fontface = "bold",
+      size = 4.5,
+      vjust = -0.5
+   ) +
+  geom_text(aes(label = format(
+      paste0(wkg, "\n W/kg"),
+      nsmall = 0,
+      digits = 1,
+      scientific = FALSE,
+      angle = 90)),
+  position = position_dodge(width = 0.9),
+  color = "#F0FFFF",
+  fontface = "bold",
+  hjust = 0.5,
+  vjust = 1.5) +
+  scale_fill_manual(name = "",
+                    values = alpha(c("#A6A6A6",
+                               "#C9C9C9"),
+                               0.70),
+                    labels = c(
+        "Saison",
+        "Saison >3k-kJ"
+      ),
+      drop = FALSE,
+      na.translate = F
+    ) +
+  scale_color_manual(name = "",
+                    values = c("#A6A6A6",
+                               "#C9C9C9"),
+                    labels = c(
+        "Saison",
+        "Saison >3k-kJ"
+      ),
+      drop = FALSE,
+      na.translate = F
+    ) +
+   scale_y_continuous(
+      breaks = seq(from = 55, to = 95, by = 10),
+      labels = c(
+         "Faible (<60%)",
+         "Potentiel (60-70%)",
+         "Haut potentiel (70-80%)",
+         "Exceptionnel (80-90%)",
+         "Classe mondiale (>90%)"
+      )
+   ) +
+   labs(y = "", x = "") +
+   ggtitle("") +
+   theme_minimal() +
+   theme(
+      legend.position = "top",
+      legend.title = element_blank(),
+      axis.ticks.y = element_blank(),
+      axis.title.x = element_blank(),
+      axis.text.x = element_text(colour = "#A6A6A6", face="bold", size = 11),
+      axis.text.y = element_text(colour = "#A6A6A6", face="bold", size = 11),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank(),
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      axis.line.x = element_line(colour = "#A6A6A6", size = 0.5),
+   ) 
+
+gg
+```
+
+\vspace{-12pt}
+
+\justifying
+
+Le degré de diminution de puissance en réponse à un travail donné permet d'évaluer le niveau de résistance à la fatigue. Une résistance à la fatigue élevée, soit une faible différence entre les records de puissance absolus et les records après 3000kJ, est l'un des meilleurs prédicteurs de performance en cyclisme sur route. 
+
+Une résistance à la fatigue optimale serait de ≤10% [@Mateo-March2022-cy]. 
+
+\newpage
+
+\raggedright
+
+### Références
+
+\vspace{12pt}
