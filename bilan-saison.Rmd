@@ -224,26 +224,13 @@ metriques_avg <- metriques %>%
 df_1 <- merge(metriques_sum, metriques_max, all = TRUE)
 df_2 <- merge(df_1, metriques_avg, all = TRUE) 
 
-# extraire valeur max
-fc_max <- df_2 %>% 
-   select(max_heartrate) %>% 
-   slice(which.max(max_heartrate))
-
-cp_max <- df_2 %>% 
-   select(icu_ftp) %>% 
-   slice(which.max(icu_ftp))
-
-poids_kg <- df_2 %>% 
-   select(icu_weight) %>% 
-   slice(which.max(icu_weight))
-   
 # calculs vars
 metriques_clean <- df_2 %>%
    # selection période
    filter(between(date, as.Date(selection_debut), as.Date(selection_fin))) %>%
-   # filter(date != "2021-04-15", 
-   #        date != "2021-04-23") |> pour erreur Fc Houle 2020-2021
-   # création des variables
+   # filter(date != "2021-04-15",
+   #        date != "2021-04-23") |> # pour erreur Fc Houle 2020-2021
+   # # création des variables
    group_by(date) %>%
    mutate(
       # luTRIMP 3 zones
@@ -392,6 +379,20 @@ metriques_clean <-
   rename_at(vars(ends_with(".y")),
             ~ str_replace(., "\\..$", "")) %>%
   select_at(vars(-ends_with(".x"))) 
+
+# extraire valeur max
+fc_max <- metriques_clean %>% 
+   select(max_heartrate) %>% 
+   slice(which.max(max_heartrate))
+
+cp_max <- metriques_clean %>% 
+   select(icu_ftp) %>% 
+   slice(which.max(icu_ftp))
+
+poids_kg <- metriques_clean %>% 
+   select(icu_weight) %>% 
+   slice(which.max(icu_weight))
+   
    
 # déoucpage période graph
 datebreaks <- seq(as.Date(selection_debut), as.Date(selection_fin), by = intervalle)
@@ -1764,7 +1765,7 @@ graphs <- grid.arrange(
 
 **Distribution de l’intensité**: 
 
-Distribution hebdomadaire (Watts) et mensuelle (sRPE) selon le modèle à 3 zones [@Seiler2006-qa]. Les zones de puissance sont établies à partir d’une puissance critique de **`r cp`** Watts conformément aux pourcentages suivant: z1=0-75%, z2=76-105%, z3=106%-+. Votre puissance critique est estimée à partir de vos données de puissance records entre 3 et 20 minutes disponibles pour 2022.
+Heures et distribution de l'intensité (Watts) mensuelle selon le modèle à 3 zones [@Seiler2006-qa]. Les zones de puissance sont établies à partir d’une puissance critique de **`r cp`** Watts conformément aux pourcentages suivant: z1=0-75%, z2=76-105%, z3=106%-+. 
 
 **Note**: 
 
@@ -1950,11 +1951,12 @@ df_full <- full_join(df, e_perf) %>%
    # remplacer NA par dernière valeur pour éviter drop data
    na.locf(na.rm = FALSE) |>
    # 0 si NaN
-mutate_if(is.numeric, function(x)
-   ifelse(is.infinite(x), 0, x)) |>
-# 0 si NA
-mutate_if(is.numeric, function(x)
-  ifelse(is.na(x), 0, x)) |> 
+mutate(across(where(is.numeric), ~na_if(., 0))) |> 
+# mutate_if(is.numeric, function(x)
+#    ifelse(is.infinite(x), 0, x)) |>
+# # 0 si NA
+# mutate_if(is.numeric, function(x)
+#   ifelse(is.na(x), 0, x)) |> 
 # remplacer next value by preceding if lower
 # mutate(icu_pm_cp_ravg7 = cummax(icu_pm_cp_ravg7[1:7, 1]))
    # rollavg max value
