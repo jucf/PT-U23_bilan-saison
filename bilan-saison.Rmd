@@ -1803,7 +1803,7 @@ En sport d’endurance, une distribution de l’intensité de type «pyramidal»
 #       zone1_h = sum(zone1_h, na.rm = TRUE),
 #       zone2_h = sum(zone2_h, na.rm = TRUE),
 #       zone3_h = sum(zone3_h, na.rm = TRUE)
-#    ) %>% 
+#    ) %>%
 #    mutate_if(is.numeric, round) %>%
 #    rename(
 #       "Heures (h)" = temps_h,
@@ -1817,11 +1817,11 @@ En sport d’endurance, une distribution de l’intensité de type «pyramidal»
 #       "CP (Watts)" = CP,
 #       "W' (Joules)" = W
 #    ) %>%
-#    select(-1) %>% 
-#    distinct() %>% 
+#    select(-1) %>%
+#    distinct() %>%
 #    pivot_longer(cols = 1:10,
 #                 names_to = "Variables",
-#                 values_to = "Saison") 
+#                 values_to = "Saison")
 # 
 # tab_resume <- metriques_clean %>%
 #    select(date,
@@ -1847,10 +1847,10 @@ En sport d’endurance, une distribution de l’intensité de type «pyramidal»
 #          "Début-saison" = "1",
 #          "Début-saison" = "2",
 #          "Mi-saison" = "3",
-#          "Mi-saison" = "4", 
+#          "Mi-saison" = "4",
 #          "Mi-saison" = "5",
 #          "Fin-saison" = "6",
-#          "Fin-saison" = "7", 
+#          "Fin-saison" = "7",
 #          "Fin-saison" = "8")
 #    ) %>%
 #    group_by(Q) %>%
@@ -1865,7 +1865,7 @@ En sport d’endurance, une distribution de l’intensité de type «pyramidal»
 #       zone3_h = sum(zone3_h, na.rm = TRUE),
 #       icu_pm_cp = max(icu_pm_cp, na.rm = TRUE),
 #       icu_pm_w_prime = max(icu_pm_w_prime, na.rm = TRUE)
-#    ) %>% 
+#    ) %>%
 #    mutate_if(is.numeric, round) %>%
 #    rename(
 #       "Heures (h)" = temps_h,
@@ -1879,12 +1879,12 @@ En sport d’endurance, une distribution de l’intensité de type «pyramidal»
 #       "CP (Watts)" = icu_pm_cp,
 #       "W' (Joules)" = icu_pm_w_prime
 #    ) %>%
-#    select(-1) %>% 
-#    distinct() %>% 
+#    select(-1) %>%
+#    distinct() %>%
 #    pivot_longer(cols = 1:10,
 #                 names_to = "Variables",
 #                 values_to = "data") %>%
-#    pivot_wider(names_from = Q, values_from = data) 
+#    pivot_wider(names_from = Q, values_from = data)
 # 
 # df_res <- merge(tot_saison, tab_resume, all = TRUE) %>%
 #    mutate(Variables =  factor(
@@ -1902,10 +1902,9 @@ En sport d’endurance, une distribution de l’intensité de type «pyramidal»
 #          "W' (Joules)"
 #       )
 #    )) %>%
-#    arrange(Variables) |> 
-#    slice(1:(n() -2))
+#    arrange(Variables)
 # 
-# df_res %>% 
+# df_res %>%
 #    kable(
 #       escape = FALSE,
 #       align = c("l", "c", "c", "c", "c", "c"),
